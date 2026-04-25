@@ -1,0 +1,80 @@
+@page "/season"
+@inject IDbContextFactory<AppDbContextTopEleven> DbFactory
+@inject ToastService Toast
+
+<PageTitle>Správa sezóny</PageTitle>
+<h3><i class="bi bi-calendar3 me-2"></i>Správa sezóny</h3>
+
+@if (_account is null)
+{
+    <div class="alert alert-warning">Nejprve vytvoř účet v sekci Hráči.</div>
+}
+else
+{
+    <div class="card mb-4" style="max-width:400px">
+        <div class="card-body text-center">
+            <h5 class="card-title">Aktuální sezóna</h5>
+            <div class="display-4 fw-bold text-primary mb-3">@_account.CurrentSeason</div>
+            <p class="text-muted">Po dokončení importu statistik z Top Eleven klikni na tlačítko níže.</p>
+            <button class="btn btn-warning btn-lg" @onclick="IncreaseSeason">
+                <i class="bi bi-arrow-up-circle me-2"></i>Nová sezóna +1
+            </button>
+        </div>
+    </div>
+
+    <h5>Přehled zadaných sezón</h5>
+    <div class="table-responsive" style="max-width:500px">
+        <table class="table table-sm">
+            <thead><tr><th>Sezóna</th><th>Počet hráčů se statistikami</th></tr></thead>
+            <tbody>
+                @foreach (var s in _seasonSummary)
+                {
+                    <tr>
+                        <td>
+                            @s.Season
+                            @if (s.Season == _account.CurrentSeason)
+                            {
+                                <span class="badge bg-primary ms-1">aktuální</span>
+                            }
+                        </td>
+                        <td>@s.Count</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    TopElevenAccount? _account;
+    List<(int Season, int Count)> _seasonSummary = new();
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    async Task Load()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _account = await db.TopElevenAccounts.FirstOrDefaultAsync();
+        if (_account is null) return;
+        var raw = await db.TopElevenSeasonStats
+            .Where(s => s.Player.AccountId == _account.Guid)
+            .GroupBy(s => s.Season)
+            .Select(g => new { Season = g.Key, Count = g.Count() })
+            .OrderByDescending(g => g.Season)
+            .ToListAsync();
+        _seasonSummary = raw.Select(x => (x.Season, x.Count)).ToList();
+    }
+
+    async Task IncreaseSeason()
+    {
+        if (_account is null) return;
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var acc = await db.TopElevenAccounts.FindAsync(_account.Guid);
+        if (acc is null) return;
+        acc.CurrentSeason++;
+        await db.SaveChangesAsync();
+        _account.CurrentSeason = acc.CurrentSeason;
+        Toast.ShowSuccess($"Sezóna posunuta na {acc.CurrentSeason}!", string.Empty);
+        await Load();
+    }
+}

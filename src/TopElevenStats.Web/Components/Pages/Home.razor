@@ -1,0 +1,123 @@
+@page "/"
+@inject IDbContextFactory<AppDbContextTopEleven> DbFactory
+@inject ToastService Toast
+
+<PageTitle>Top Eleven Stats – Dashboard</PageTitle>
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <h3><i class="bi bi-trophy-fill text-warning me-2"></i>Sezóna @_season – statistiky</h3>
+</div>
+
+@if (_loading)
+{
+    <div class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+}
+else if (_players.Count == 0)
+{
+    <div class="alert alert-info">Žádní hráči v databázi. Nejdříve přidej hráče v sekci <a href="/players">Hráči</a>.</div>
+}
+else
+{
+    @if (_gkStats.Count > 0)
+    {
+        <h5 class="mt-3"><i class="bi bi-shield-fill me-2"></i>Brankáři</h5>
+        <div class="table-responsive mb-4">
+            <table class="table table-sm table-hover align-middle">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Hráč</th><th>OVR</th><th>Věk</th>
+                        <th>Hod.</th><th>Zápasy</th><th>Čistá konta</th>
+                        <th>Žl.</th><th>Čerr.</th><th>S hráčem</th><th>Bez hráče</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var s in _gkStats)
+                    {
+                        <tr>
+                            <td>@s.Player.Name</td>
+                            <td>@s.Player.Ovr</td>
+                            <td>@s.Player.Age</td>
+                            <td>@s.AvgRating.ToString("F1")</td>
+                            <td>@s.MatchesPlayed</td>
+                            <td>@s.CleanSheets</td>
+                            <td>@s.YellowCards</td>
+                            <td>@s.RedCards</td>
+                            <td><span class="badge @WinBadge(s.WinRatioWith)">@s.WinRatioWith %</span></td>
+                            <td><span class="badge @WinBadge(s.WinRatioWithout)">@s.WinRatioWithout %</span></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    @if (_outfieldStats.Count > 0)
+    {
+        <h5><i class="bi bi-person-running me-2"></i>Hráči v poli</h5>
+        <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Hráč</th><th>OVR</th><th>Role</th><th>Věk</th>
+                        <th>Hod.</th><th>Zápasy</th><th>Góly</th><th>xG90</th>
+                        <th>Asist.</th><th>Klíč. přihr.</th>
+                        <th>Žl.</th><th>Čerr.</th><th>S hráčem</th><th>Bez hráče</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var s in _outfieldStats)
+                    {
+                        <tr>
+                            <td>
+                                @s.Player.Name
+                                @if (s.Player.IsElite)
+                                {
+                                    <span class="badge bg-warning text-dark ms-1">ELITNÍ</span>
+                                }
+                            </td>
+                            <td>@s.Player.Ovr</td>
+                            <td><span class="badge bg-secondary">@s.Player.Roles</span></td>
+                            <td>@s.Player.Age</td>
+                            <td>@s.AvgRating.ToString("F1")</td>
+                            <td>@s.MatchesPlayed</td>
+                            <td>@s.Goals</td>
+                            <td>@(s.Xg90?.ToString("F1") ?? "-")</td>
+                            <td>@s.Assists</td>
+                            <td>@s.KeyPasses.ToString("F1")</td>
+                            <td>@s.YellowCards</td>
+                            <td>@s.RedCards</td>
+                            <td><span class="badge @WinBadge(s.WinRatioWith)">@s.WinRatioWith %</span></td>
+                            <td><span class="badge @WinBadge(s.WinRatioWithout)">@s.WinRatioWithout %</span></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+}
+
+@code {
+    bool _loading = true;
+    int _season;
+    List<TopElevenPlayer> _players = new();
+    List<TopElevenSeasonStats> _gkStats = new();
+    List<TopElevenSeasonStats> _outfieldStats = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var account = await db.TopElevenAccounts.FirstOrDefaultAsync();
+        if (account is null) { _loading = false; return; }
+        _season = account.CurrentSeason;
+        _players = await db.TopElevenPlayers.Where(p => p.AccountId == account.Guid).ToListAsync();
+        var stats = await db.TopElevenSeasonStats
+            .Include(s => s.Player)
+            .Where(s => s.Season == _season && s.Player.AccountId == account.Guid)
+            .ToListAsync();
+        _gkStats = stats.Where(s => s.Player.IsGoalkeeper).OrderByDescending(s => s.Player.Ovr).ToList();
+        _outfieldStats = stats.Where(s => !s.Player.IsGoalkeeper).OrderByDescending(s => s.Player.Ovr).ToList();
+        _loading = false;
+    }
+
+    static string WinBadge(int pct) => pct >= 50 ? "bg-success" : "bg-danger";
+}

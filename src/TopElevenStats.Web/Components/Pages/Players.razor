@@ -1,0 +1,132 @@
+@page "/players"
+@inject IDbContextFactory<AppDbContextTopEleven> DbFactory
+@inject ToastService Toast
+
+<PageTitle>Hráči</PageTitle>
+<h3><i class="bi bi-people-fill me-2"></i>Hráči</h3>
+
+@if (_account is null)
+{
+    <div class="alert alert-warning">
+        Nejprve vytvoř účet.
+        <div class="mt-2">
+            <input class="form-control mb-2" placeholder="Název účtu" @bind="_newAccountName" style="max-width:300px" />
+            <button class="btn btn-primary btn-sm" @onclick="CreateAccount">Vytvořit účet</button>
+        </div>
+    </div>
+}
+else
+{
+    <div class="mb-3">
+        <button class="btn btn-success btn-sm" @onclick="() => _showForm = !_showForm">
+            <i class="bi bi-plus-circle me-1"></i>Přidat hráče
+        </button>
+    </div>
+
+    @if (_showForm)
+    {
+        <div class="card mb-3" style="max-width:500px">
+            <div class="card-body">
+                <h6>Nový hráč</h6>
+                <div class="mb-2"><label>Jméno</label><input class="form-control" @bind="_form.Name" /></div>
+                <div class="row g-2 mb-2">
+                    <div class="col"><label>OVR</label><input type="number" class="form-control" @bind="_form.Ovr" /></div>
+                    <div class="col"><label>Věk</label><input type="number" class="form-control" @bind="_form.Age" /></div>
+                </div>
+                <div class="mb-2"><label>Občanství</label><input class="form-control" @bind="_form.Citizenship" /></div>
+                <div class="mb-2"><label>Role (např. GK nebo AML,ML)</label><input class="form-control" @bind="_form.Roles" /></div>
+                <div class="mb-2"><label>Spec. schopnost</label><input class="form-control" @bind="_form.SpecialAbility" /></div>
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" @bind="_form.IsGoalkeeper" id="isGk" />
+                    <label class="form-check-label" for="isGk">Brankář</label>
+                </div>
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" @bind="_form.IsElite" id="isElite" />
+                    <label class="form-check-label" for="isElite">Elitní</label>
+                </div>
+                <button class="btn btn-primary btn-sm" @onclick="AddPlayer">Uložit</button>
+                <button class="btn btn-secondary btn-sm ms-2" @onclick="() => _showForm = false">Zrušit</button>
+            </div>
+        </div>
+    }
+
+    <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle">
+            <thead class="table-dark">
+                <tr><th>Jméno</th><th>OVR</th><th>Věk</th><th>Role</th><th>Spec.</th><th>Elitní</th><th></th></tr>
+            </thead>
+            <tbody>
+                @foreach (var p in _players)
+                {
+                    <tr>
+                        <td>@p.Name</td>
+                        <td>@p.Ovr</td>
+                        <td>@p.Age</td>
+                        <td><span class="badge @(p.IsGoalkeeper ? "bg-success" : "bg-primary")">@p.Roles</span></td>
+                        <td>@p.SpecialAbility</td>
+                        <td>@(p.IsElite ? "✓" : "")</td>
+                        <td>
+                            <button class="btn btn-danger btn-sm" @onclick="() => DeletePlayer(p.Guid)">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    TopElevenAccount? _account;
+    List<TopElevenPlayer> _players = new();
+    bool _showForm;
+    string _newAccountName = "Můj účet";
+    TopElevenPlayer _form = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _account = await db.TopElevenAccounts.FirstOrDefaultAsync();
+        if (_account is not null)
+            _players = await db.TopElevenPlayers
+                .Where(p => p.AccountId == _account.Guid)
+                .OrderByDescending(p => p.Ovr)
+                .ToListAsync();
+    }
+
+    async Task CreateAccount()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var acc = new TopElevenAccount { Name = _newAccountName, CurrentSeason = 1 };
+        db.TopElevenAccounts.Add(acc);
+        await db.SaveChangesAsync();
+        _account = acc;
+        Toast.ShowSuccess("Účet vytvořen!", string.Empty);
+        StateHasChanged();
+    }
+
+    async Task AddPlayer()
+    {
+        if (string.IsNullOrWhiteSpace(_form.Name)) { Toast.ShowError("Chyba", "Jméno je povinné."); return; }
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _form.AccountId = _account!.Guid;
+        db.TopElevenPlayers.Add(_form);
+        await db.SaveChangesAsync();
+        _players.Insert(0, _form);
+        _form = new();
+        _showForm = false;
+        Toast.ShowSuccess("Hráč přidán!", string.Empty);
+    }
+
+    async Task DeletePlayer(Guid id)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var p = await db.TopElevenPlayers.FindAsync(id);
+        if (p is null) return;
+        db.TopElevenPlayers.Remove(p);
+        await db.SaveChangesAsync();
+        _players.RemoveAll(x => x.Guid == id);
+        Toast.ShowSuccess("Hráč odstraněn.", string.Empty);
+    }
+}

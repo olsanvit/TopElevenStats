@@ -1,0 +1,198 @@
+@page "/stats/add"
+@inject IDbContextFactory<AppDbContextTopEleven> DbFactory
+@inject ToastService Toast
+
+<PageTitle>Přidat statistiky</PageTitle>
+<h3><i class="bi bi-plus-circle-fill me-2"></i>Přidat statistiky sezóny</h3>
+
+@if (_account is null)
+{
+    <div class="alert alert-warning">Nejprve vytvoř účet a hráče.</div>
+}
+else
+{
+    <div class="mb-3" style="max-width:400px">
+        <label class="form-label fw-bold">Sezóna @_account.CurrentSeason – Hráč</label>
+        <select class="form-select" value="@_selectedPlayerId" @onchange="OnPlayerChanged">
+            <option value="">— vyber hráče —</option>
+            @foreach (var p in _players)
+            {
+                <option value="@p.Guid">@p.Name (@p.Roles) OVR @p.Ovr</option>
+            }
+        </select>
+    </div>
+
+    @if (_selectedPlayer is not null)
+    {
+        <div class="card" style="max-width:560px">
+            <div class="card-header fw-bold">
+                @_selectedPlayer.Name – Sezóna @_account.CurrentSeason
+                @if (_selectedPlayer.IsGoalkeeper)
+                {
+                    <span class="badge bg-success ms-2">GK</span>
+                }
+                else if (_selectedPlayer.IsElite)
+                {
+                    <span class="badge bg-warning text-dark ms-2">ELITNÍ</span>
+                }
+            </div>
+            <div class="card-body">
+                @if (_existingStats is not null)
+                {
+                    <div class="alert alert-warning py-1">Statistiky pro tuto sezónu již existují – přepíšou se uložením.</div>
+                }
+
+                <div class="row g-2 mb-2">
+                    <div class="col-6 col-md-4">
+                        <label>Průměrné hodnocení</label>
+                        <input type="number" step="0.1" class="form-control" @bind="_s.AvgRating" />
+                    </div>
+                    <div class="col-6 col-md-4">
+                        <label>Odehrané zápasy</label>
+                        <input type="number" class="form-control" @bind="_s.MatchesPlayed" />
+                    </div>
+                    @if (!_selectedPlayer.IsGoalkeeper)
+                    {
+                        <div class="col-6 col-md-4">
+                            <label>Góly</label>
+                            <input type="number" class="form-control" @bind="_goalsInput" />
+                        </div>
+                        <div class="col-6 col-md-4">
+                            <label>xG90</label>
+                            <input type="number" step="0.1" class="form-control" @bind="_xg90Input" />
+                        </div>
+                    }
+                    <div class="col-6 col-md-4">
+                        <label>Asistence</label>
+                        <input type="number" class="form-control" @bind="_s.Assists" />
+                    </div>
+                    <div class="col-6 col-md-4">
+                        <label>Klíčové přihrávky</label>
+                        <input type="number" step="0.1" class="form-control" @bind="_s.KeyPasses" />
+                    </div>
+                    @if (_selectedPlayer.IsGoalkeeper)
+                    {
+                        <div class="col-6 col-md-4">
+                            <label>Čistá konta</label>
+                            <input type="number" class="form-control" @bind="_cleanSheetsInput" />
+                        </div>
+                    }
+                </div>
+
+                <div class="row g-2 mb-2">
+                    <div class="col-4"><label>Zranění</label><input type="number" class="form-control" @bind="_s.Injuries" /></div>
+                    <div class="col-4"><label>Žluté karty</label><input type="number" class="form-control" @bind="_s.YellowCards" /></div>
+                    <div class="col-4"><label>Červené karty</label><input type="number" class="form-control" @bind="_s.RedCards" /></div>
+                </div>
+
+                <div class="row g-2 mb-3">
+                    <div class="col-4"><label>S hráčem %</label><input type="number" class="form-control" @bind="_s.WinRatioWith" /></div>
+                    <div class="col-4"><label>Bez hráče %</label><input type="number" class="form-control" @bind="_s.WinRatioWithout" /></div>
+                    <div class="col-4"><label>Týmový průměr %</label><input type="number" class="form-control" @bind="_s.TeamAverage" /></div>
+                </div>
+
+                <button class="btn btn-primary" @onclick="Save"><i class="bi bi-floppy me-1"></i>Uložit</button>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    TopElevenAccount? _account;
+    List<TopElevenPlayer> _players = new();
+    Guid? _selectedPlayerId;
+    TopElevenPlayer? _selectedPlayer;
+    TopElevenSeasonStats? _existingStats;
+    TopElevenSeasonStats _s = new();
+    int? _goalsInput;
+    decimal? _xg90Input;
+    int? _cleanSheetsInput;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _account = await db.TopElevenAccounts.FirstOrDefaultAsync();
+        if (_account is not null)
+            _players = await db.TopElevenPlayers
+                .Where(p => p.AccountId == _account.Guid)
+                .OrderByDescending(p => p.IsGoalkeeper)
+                .ThenByDescending(p => p.Ovr)
+                .ToListAsync();
+    }
+
+    async Task OnPlayerChanged(ChangeEventArgs e)
+    {
+        _selectedPlayerId = Guid.TryParse(e.Value?.ToString(), out var g) ? g : (Guid?)null;
+        await LoadPlayer();
+    }
+
+    async Task LoadPlayer()
+    {
+        if (_selectedPlayerId is null || _account is null) { _selectedPlayer = null; return; }
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _selectedPlayer = _players.FirstOrDefault(p => p.Guid == _selectedPlayerId);
+        _existingStats = await db.TopElevenSeasonStats
+            .FirstOrDefaultAsync(s => s.PlayerId == _selectedPlayerId && s.Season == _account.CurrentSeason);
+        _s = _existingStats is not null
+            ? new TopElevenSeasonStats
+            {
+                AvgRating = _existingStats.AvgRating,
+                MatchesPlayed = _existingStats.MatchesPlayed,
+                Assists = _existingStats.Assists,
+                KeyPasses = _existingStats.KeyPasses,
+                Injuries = _existingStats.Injuries,
+                YellowCards = _existingStats.YellowCards,
+                RedCards = _existingStats.RedCards,
+                WinRatioWith = _existingStats.WinRatioWith,
+                WinRatioWithout = _existingStats.WinRatioWithout,
+                TeamAverage = _existingStats.TeamAverage,
+            }
+            : new();
+        _goalsInput = _existingStats?.Goals;
+        _xg90Input = _existingStats?.Xg90;
+        _cleanSheetsInput = _existingStats?.CleanSheets;
+        StateHasChanged();
+    }
+
+    async Task Save()
+    {
+        if (_selectedPlayer is null || _account is null) return;
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        TopElevenSeasonStats? entity = _existingStats is null ? null
+            : await db.TopElevenSeasonStats.FindAsync(_existingStats.Guid);
+
+        if (entity is null)
+        {
+            entity = new TopElevenSeasonStats
+            {
+                PlayerId = _selectedPlayer.Guid,
+                Season = _account.CurrentSeason,
+            };
+            db.TopElevenSeasonStats.Add(entity);
+        }
+
+        entity.AvgRating = _s.AvgRating;
+        entity.MatchesPlayed = _s.MatchesPlayed;
+        entity.Assists = _s.Assists;
+        entity.KeyPasses = _s.KeyPasses;
+        entity.Injuries = _s.Injuries;
+        entity.YellowCards = _s.YellowCards;
+        entity.RedCards = _s.RedCards;
+        entity.WinRatioWith = _s.WinRatioWith;
+        entity.WinRatioWithout = _s.WinRatioWithout;
+        entity.TeamAverage = _s.TeamAverage;
+
+        if (_selectedPlayer.IsGoalkeeper)
+            entity.CleanSheets = _cleanSheetsInput;
+        else
+        {
+            entity.Goals = _goalsInput;
+            entity.Xg90 = _xg90Input;
+        }
+
+        await db.SaveChangesAsync();
+        _existingStats = entity;
+        Toast.ShowSuccess("Statistiky uloženy!", string.Empty);
+    }
+}

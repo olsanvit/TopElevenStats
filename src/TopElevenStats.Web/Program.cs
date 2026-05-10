@@ -1,8 +1,11 @@
 using BlazorTopEleven.Components;
+using MercenariesAndBeasts.Infrastructure;
+using MercenariesAndBeasts.Infrastructure.Auth;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Components.Server;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.SignalR;
-using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using Serilog;
 using Serilog.Exceptions;
@@ -13,6 +16,7 @@ using Blazored.LocalStorage;
 using Blazored.Modal;
 using Blazored.SessionStorage;
 using ApexCharts;
+using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -34,6 +38,8 @@ builder.Host.UseSerilog();
 
 builder.Logging.AddDebug();
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
+builder.Services.AddRazorPages();
+builder.Services.AddControllers();
 
 builder.Services.Configure<CircuitOptions>(o =>
 {
@@ -57,18 +63,15 @@ var dsb = new NpgsqlDataSourceBuilder(cs);
 dsb.EnableDynamicJson();
 var dataSource = dsb.Build();
 
-builder.Services.AddDbContextFactory<AppDbContextTopEleven>(options =>
-    options.UseNpgsql(dataSource, npgsqlOptions =>
-    {
-        npgsqlOptions.MigrationsAssembly("SharedServices");
-        npgsqlOptions.CommandTimeout(180);
-        npgsqlOptions.EnableRetryOnFailure(maxRetryCount: 5, maxRetryDelay: TimeSpan.FromSeconds(5), errorCodesToAdd: null);
-    })
-    .EnableSensitiveDataLogging()
-    .EnableDetailedErrors());
+// AddMabDbContext = AddDbContextFactory + scoped AddDbContext (Identity potřebuje scoped)
+builder.Services.AddMabDbContext<AppDbContextGames>(dataSource);
 
-builder.Services.AddScoped<AppDbContextTopEleven>(sp =>
-    sp.GetRequiredService<IDbContextFactory<AppDbContextTopEleven>>().CreateDbContext());
+// Identity + Google OAuth
+builder.Services.AddMabAuth<AppDbContextGames>(builder.Configuration);
+
+// Identity UI vyžaduje IEmailSender — no-op implementace
+builder.Services.AddSingleton<Microsoft.AspNetCore.Identity.UI.Services.IEmailSender,
+    NoOpEmailSender>();
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddCors();
@@ -78,15 +81,8 @@ builder.Services.AddBlazoredModal();
 builder.Services.AddBlazoredLocalStorage();
 builder.Services.AddBlazoredSessionStorage();
 builder.Services.AddApexCharts();
-builder.Services.AddScoped<ErrorService<AppDbContextTopEleven>>();
-builder.Services.AddScoped<EfCoreService<AppDbContextTopEleven>>();
-builder.Services.AddScoped(provider =>
-    new MigrationService<AppDbContextTopEleven>(
-        provider,
-        provider.GetRequiredService<ILogger<MigrationService<AppDbContextTopEleven>>>(),
-        "SharedServices",
-        "BlazorTopEleven"
-    ));
+builder.Services.AddScoped<ErrorService<AppDbContextGames>>();
+builder.Services.AddScoped<EfCoreService<AppDbContextGames>>();
 builder.Services.AddSingleton<ThemeService>(_ => new ThemeService(builder.Configuration));
 builder.Services.AddDistributedMemoryCache();
 builder.Services.AddSession(options =>
@@ -115,12 +111,6 @@ app.UseForwardedHeaders(new ForwardedHeadersOptions
     ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
 });
 
-using (var scope = app.Services.CreateScope())
-{
-    var migrationService = scope.ServiceProvider.GetRequiredService<MigrationService<AppDbContextTopEleven>>();
-    await migrationService.MigrateDatabaseAsync();
-}
-
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
@@ -130,17 +120,152 @@ if (!app.Environment.IsDevelopment())
 if (!app.Environment.IsProduction())
     app.UseHttpsRedirection();
 
+app.MapStaticAssets();
 app.UseStaticFiles();
 app.UseCors(b => b.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
+app.UseRouting();
+app.UseAuthentication();
+app.UseAuthorization();
 app.UseSession();
 app.UseAntiforgery();
 
-app.MapStaticAssets();
-app.MapRazorComponents<App>()
-    .AddInteractiveServerRenderMode();
+app.MapRazorPages();
 
-app.Lifetime.ApplicationStopping.Register(() => Log.Warning("Application stopping — flushing logs..."));
+app.MapRazorComponents<App>()
+    .AddInteractiveServerRenderMode()
+    .AddAdditionalAssemblies(typeof(MercenariesAndBeasts.Infrastructure.Components.Account.Login).Assembly);
+
+app.MapControllers();
+
+// ── Google OAuth external login endpoints ──────────────────────────────────
+app.MapPost("/Identity/Account/ExternalLogin", async (
+    HttpContext http,
+    SignInManager<AppUser> signInManager) =>
+{
+    var provider  = http.Request.Form["provider"].ToString();
+    var returnUrl = http.Request.Form["returnUrl"].ToString() ?? "/";
+    var callback  = $"/Identity/Account/ExternalLogin/Callback?returnUrl={Uri.EscapeDataString(returnUrl)}";
+    var props     = signInManager.ConfigureExternalAuthenticationProperties(provider, callback);
+    return Results.Challenge(props, new[] { provider });
+}).DisableAntiforgery();
+
+app.MapGet("/Identity/Account/ExternalLogin/Callback", async (
+    HttpContext http,
+    string? returnUrl,
+    SignInManager<AppUser> signInManager,
+    UserManager<AppUser> userManager) =>
+{
+    returnUrl ??= "/";
+    var info = await signInManager.GetExternalLoginInfoAsync();
+    if (info is null)
+        return Results.Redirect("/login?error=external");
+
+    var signIn = await signInManager.ExternalLoginSignInAsync(
+        info.LoginProvider, info.ProviderKey, isPersistent: true);
+
+    if (signIn.Succeeded)
+        return Results.Redirect(returnUrl);
+
+    var email = info.Principal.FindFirstValue(ClaimTypes.Email) ?? "";
+    if (string.IsNullOrWhiteSpace(email))
+        return Results.Redirect("/login?error=noemail");
+
+    var user = new AppUser { UserName = email, Email = email };
+    var created = await userManager.CreateAsync(user);
+    if (created.Succeeded)
+    {
+        await userManager.AddLoginAsync(user, info);
+        await signInManager.SignInAsync(user, isPersistent: true);
+        return Results.Redirect(returnUrl);
+    }
+
+    var existing = await userManager.FindByEmailAsync(email);
+    if (existing is not null)
+    {
+        await userManager.AddLoginAsync(existing, info);
+        await signInManager.SignInAsync(existing, isPersistent: true);
+        return Results.Redirect(returnUrl);
+    }
+
+    return Results.Redirect("/login?error=external");
+});
+
+// ── Migrate DB + Seed admin ────────────────────────────────────────────────
+using (var scope = app.Services.CreateScope())
+{
+    var services    = scope.ServiceProvider;
+    var db          = services.GetRequiredService<AppDbContextGames>();
+    var userManager = services.GetRequiredService<UserManager<AppUser>>();
+    var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
+
+    await db.Database.MigrateAsync();
+    await SeedAdminAsync(userManager, roleManager);
+}
+
+app.Lifetime.ApplicationStopping.Register(() =>
+    Log.Warning("Application stopping — flushing logs..."));
 
 try { app.Run(); }
 catch (Exception ex) { Log.Fatal(ex, "Host terminated unexpectedly"); }
 finally { Log.CloseAndFlush(); }
+
+// ── Seed helpers ──────────────────────────────────────────────────────────
+static async Task SeedAdminAsync(
+    UserManager<AppUser> userManager,
+    RoleManager<IdentityRole> roleManager)
+{
+    const string adminRole = "Admin";
+
+    if (!await roleManager.RoleExistsAsync(adminRole))
+        await roleManager.CreateAsync(new IdentityRole(adminRole));
+
+    await EnsureAdminAsync(userManager, adminRole,
+        email: "admin@local",
+        username: "admin",
+        password: "Admin123.");
+
+    await EnsureAdminAsync(userManager, adminRole,
+        email: "olsanskyvitek@gmail.com",
+        username: "vitek",
+        password: "Vitek575");
+}
+
+static async Task EnsureAdminAsync(
+    UserManager<AppUser> userManager,
+    string adminRole,
+    string email,
+    string username,
+    string password)
+{
+    var user = await userManager.FindByEmailAsync(email);
+
+    if (user is null)
+    {
+        user = new AppUser
+        {
+            UserName = username,
+            Email = email,
+            EmailConfirmed = true,
+            IsAdmin = true
+        };
+        var result = await userManager.CreateAsync(user, password);
+        if (!result.Succeeded)
+            throw new Exception($"Failed to create user {email}: " +
+                string.Join(", ", result.Errors.Select(e => e.Description)));
+    }
+    else if (!user.IsAdmin)
+    {
+        user.IsAdmin = true;
+        await userManager.UpdateAsync(user);
+    }
+
+    if (!await userManager.IsInRoleAsync(user, adminRole))
+        await userManager.AddToRoleAsync(user, adminRole);
+}
+
+// ── No-op IEmailSender ────────────────────────────────────────────────────
+file sealed class NoOpEmailSender : Microsoft.AspNetCore.Identity.UI.Services.IEmailSender
+{
+    public Task SendEmailAsync(string email, string subject, string htmlMessage)
+        => Task.CompletedTask;
+}

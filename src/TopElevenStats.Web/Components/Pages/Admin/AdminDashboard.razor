@@ -1,0 +1,95 @@
+@page "/admin"
+@rendermode InteractiveServer
+@attribute [Authorize(Roles = "Admin")]
+
+@using MercenariesAndBeasts.Infrastructure
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@inject UserManager<AppUser> UserManager
+@inject IDbContextFactory<AppDbContextGames> DbFactory
+@inject NavigationManager Nav
+
+<PageTitle>Admin — TopElevenStats</PageTitle>
+
+<div class="container-fluid py-4">
+    <h2 class="mb-4">Admin Dashboard — TopElevenStats</h2>
+    @if (_loading)
+    {
+        <div class="text-center py-5"><div class="spinner-border" role="status"></div></div>
+    }
+    else
+    {
+        <div class="row g-3 mb-4">
+            <div class="col-md-3">
+                <div class="card text-center border-primary">
+                    <div class="card-body">
+                        <div class="fs-2 fw-bold text-primary">@_userCount</div>
+                        <div class="text-muted small">Uživatelé</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center border-info">
+                    <div class="card-body">
+                        <div class="fs-2 fw-bold text-info">@_accountCount</div>
+                        <div class="text-muted small">TE účty</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center border-success">
+                    <div class="card-body">
+                        <div class="fs-2 fw-bold text-success">@_playerCount</div>
+                        <div class="text-muted small">Hráči</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center border-warning">
+                    <div class="card-body">
+                        <div class="fs-2 fw-bold text-warning">@_seasonCount</div>
+                        <div class="text-muted small">Sezónní záznamy</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header"><strong>Uživatelé</strong></div>
+            <div class="card-body p-0">
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light">
+                        <tr><th>Email</th><th>Admin</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var u in _users)
+                        {
+                            <tr>
+                                <td>@u.Email</td>
+                                <td>@(u.IsAdmin ? "✓" : "")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private int _userCount, _accountCount, _playerCount, _seasonCount;
+    private List<AppUser> _users = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _users = UserManager.Users.OrderByDescending(u => u.IsAdmin).ToList();
+        _userCount = _users.Count;
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _accountCount = await db.TopElevenAccounts.CountAsync();
+        _playerCount  = await db.TopElevenPlayers.CountAsync();
+        _seasonCount  = await db.TopElevenSeasonStats.CountAsync();
+        _loading = false;
+    }
+}

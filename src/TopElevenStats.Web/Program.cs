@@ -118,6 +118,10 @@ app.UseForwardedHeaders(new ForwardedHeadersOptions
     ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
 });
 
+var pathBase = builder.Configuration["PathBase"];
+if (!string.IsNullOrWhiteSpace(pathBase))
+    app.UsePathBase(pathBase);
+
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);

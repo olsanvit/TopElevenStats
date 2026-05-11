@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.SignalR;
 using Npgsql;
 using Serilog;
 using Serilog.Exceptions;
+using Serilog.Sinks.PostgreSQL.ColumnWriters;
 using Services;
 using SharedServices;
 using SharedServices.Services;
@@ -33,6 +34,12 @@ Log.Logger = new LoggerConfiguration()
     .WriteTo.Console(outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss} [{Level:u3}] {SourceContext} {Message:lj}{NewLine}{Exception}")
     .WriteTo.File("Logs/log-.txt", rollingInterval: RollingInterval.Day, retainedFileCountLimit: 30, shared: true,
         outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss} [{Level:u3}] {SourceContext} {Message:lj}{NewLine}{Exception}")
+    .WriteTo.PostgreSQL(
+        connectionString: builder.Configuration.GetConnectionString("DefaultConnection1") ?? "",
+        tableName: "Logs",
+        columnOptions: (IDictionary<string, ColumnWriterBase>?)null,
+        needAutoCreateTable: true,
+        restrictedToMinimumLevel: Serilog.Events.LogEventLevel.Warning)
     .CreateLogger();
 builder.Host.UseSerilog();
 
@@ -116,6 +123,7 @@ if (!app.Environment.IsDevelopment())
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
     app.UseHsts();
 }
+app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 
 if (!app.Environment.IsProduction())
     app.UseHttpsRedirection();

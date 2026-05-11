@@ -1,4 +1,6 @@
 @page "/players"
+@rendermode InteractiveServer
+@attribute [Authorize]
 @inject IDbContextFactory<AppDbContextGames> DbFactory
 @inject ToastService Toast
 

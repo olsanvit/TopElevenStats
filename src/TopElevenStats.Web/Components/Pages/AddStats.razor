@@ -1,4 +1,6 @@
 @page "/stats/add"
+@rendermode InteractiveServer
+@attribute [Authorize]
 @inject IDbContextFactory<AppDbContextGames> DbFactory
 @inject ToastService Toast
 

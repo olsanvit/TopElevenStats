@@ -113,6 +113,10 @@ TaskScheduler.UnobservedTaskException += (sender, e) =>
 };
 
 var app = builder.Build();
+
+if (string.IsNullOrWhiteSpace(builder.Configuration["Authentication:Google:ClientId"]))
+    Log.Warning("Google OAuth ClientId is not configured — Google login will not work");
+
 app.UseForwardedHeaders(new ForwardedHeadersOptions
 {
     ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto

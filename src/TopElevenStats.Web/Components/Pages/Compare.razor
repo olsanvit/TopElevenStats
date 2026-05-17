@@ -1,0 +1,168 @@
+@page "/compare"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<AppDbContextGames> DbFactory
+
+<PageTitle>Srovnání hráčů</PageTitle>
+<h3><i class="bi bi-people me-2"></i>Srovnání hráčů</h3>
+
+<div class="row g-3 mb-4">
+    <div class="col-12 col-md-6">
+        <label class="form-label fw-bold">Hráč A</label>
+        <select class="form-select" value="@_leftId" @onchange="OnLeftChanged">
+            <option value="">— vyber hráče A —</option>
+            @foreach (var p in _players)
+            {
+                <option value="@p.Guid">@p.Name (@p.Roles) OVR @p.Ovr@(p.IsGoalkeeper ? " · GK" : "")@(p.IsElite ? " · ELITE" : "")</option>
+            }
+        </select>
+    </div>
+    <div class="col-12 col-md-6">
+        <label class="form-label fw-bold">Hráč B</label>
+        <select class="form-select" value="@_rightId" @onchange="OnRightChanged">
+            <option value="">— vyber hráče B —</option>
+            @foreach (var p in _players)
+            {
+                <option value="@p.Guid">@p.Name (@p.Roles) OVR @p.Ovr@(p.IsGoalkeeper ? " · GK" : "")@(p.IsElite ? " · ELITE" : "")</option>
+            }
+        </select>
+    </div>
+</div>
+
+@if (_leftPlayer is not null && _rightPlayer is not null)
+{
+    var commonSeasons = _leftStats
+        .Select(s => s.Season)
+        .Intersect(_rightStats.Select(s => s.Season))
+        .OrderBy(s => s)
+        .ToList();
+
+    <div class="table-responsive">
+        <table class="table table-sm table-hover table-bordered align-middle">
+            <thead class="table-dark">
+                <tr>
+                    <th>Sezóna</th>
+                    <th colspan="2" class="text-center">Hodnocení</th>
+                    <th colspan="2" class="text-center">Zápasy</th>
+                    @if (_leftPlayer.IsGoalkeeper || _rightPlayer.IsGoalkeeper)
+                    {
+                        <th colspan="2" class="text-center">Čistá konta / Góly</th>
+                    }
+                    else
+                    {
+                        <th colspan="2" class="text-center">Góly</th>
+                    }
+                    <th colspan="2" class="text-center">Asistence</th>
+                    <th colspan="2" class="text-center">S hráčem %</th>
+                </tr>
+                <tr>
+                    <th></th>
+                    <th class="text-primary">@_leftPlayer.Name</th>
+                    <th class="text-danger">@_rightPlayer.Name</th>
+                    <th class="text-primary">@_leftPlayer.Name</th>
+                    <th class="text-danger">@_rightPlayer.Name</th>
+                    <th class="text-primary">@_leftPlayer.Name</th>
+                    <th class="text-danger">@_rightPlayer.Name</th>
+                    <th class="text-primary">@_leftPlayer.Name</th>
+                    <th class="text-danger">@_rightPlayer.Name</th>
+                    <th class="text-primary">@_leftPlayer.Name</th>
+                    <th class="text-danger">@_rightPlayer.Name</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var season in commonSeasons)
+                {
+                    var L = _leftStats.First(s => s.Season == season);
+                    var R = _rightStats.First(s => s.Season == season);
+                    <tr>
+                        <td class="fw-bold">@season</td>
+                        <td class="@(L.AvgRating > R.AvgRating ? "table-success fw-bold" : "")">@L.AvgRating.ToString("F1")</td>
+                        <td class="@(R.AvgRating > L.AvgRating ? "table-success fw-bold" : "")">@R.AvgRating.ToString("F1")</td>
+                        <td class="@(L.MatchesPlayed > R.MatchesPlayed ? "table-success fw-bold" : "")">@L.MatchesPlayed</td>
+                        <td class="@(R.MatchesPlayed > L.MatchesPlayed ? "table-success fw-bold" : "")">@R.MatchesPlayed</td>
+                        @{
+                            int lGoalStat = _leftPlayer.IsGoalkeeper ? (L.CleanSheets ?? 0) : (L.Goals ?? 0);
+                            int rGoalStat = _rightPlayer.IsGoalkeeper ? (R.CleanSheets ?? 0) : (R.Goals ?? 0);
+                            string lGoalDisplay = _leftPlayer.IsGoalkeeper ? (L.CleanSheets?.ToString() ?? "—") : (L.Goals?.ToString() ?? "—");
+                            string rGoalDisplay = _rightPlayer.IsGoalkeeper ? (R.CleanSheets?.ToString() ?? "—") : (R.Goals?.ToString() ?? "—");
+                        }
+                        <td class="@(lGoalStat > rGoalStat ? "table-success fw-bold" : "")">@lGoalDisplay</td>
+                        <td class="@(rGoalStat > lGoalStat ? "table-success fw-bold" : "")">@rGoalDisplay</td>
+                        <td class="@(L.Assists > R.Assists ? "table-success fw-bold" : "")">@L.Assists</td>
+                        <td class="@(R.Assists > L.Assists ? "table-success fw-bold" : "")">@R.Assists</td>
+                        <td class="@(L.WinRatioWith > R.WinRatioWith ? "table-success fw-bold" : "")">@L.WinRatioWith</td>
+                        <td class="@(R.WinRatioWith > L.WinRatioWith ? "table-success fw-bold" : "")">@R.WinRatioWith</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @if (commonSeasons.Count == 0)
+    {
+        <div class="alert alert-warning">Tito hráči nemají žádné společné sezóny.</div>
+    }
+}
+else if (_leftPlayer is not null || _rightPlayer is not null)
+{
+    <div class="alert alert-info">Vyber oba hráče pro zobrazení srovnání.</div>
+}
+
+@code {
+    List<TopElevenPlayer> _players = new();
+
+    Guid? _leftId;
+    TopElevenPlayer? _leftPlayer;
+    List<TopElevenSeasonStats> _leftStats = new();
+
+    Guid? _rightId;
+    TopElevenPlayer? _rightPlayer;
+    List<TopElevenSeasonStats> _rightStats = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _players = await db.TopElevenPlayers
+            .OrderByDescending(p => p.Ovr)
+            .ToListAsync();
+    }
+
+    async Task OnLeftChanged(ChangeEventArgs e)
+    {
+        _leftId = Guid.TryParse(e.Value?.ToString(), out var g) ? g : (Guid?)null;
+        _leftPlayer = null;
+        _leftStats = new();
+
+        if (_leftId is null) return;
+
+        _leftPlayer = _players.FirstOrDefault(p => p.Guid == _leftId);
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _leftStats = await db.TopElevenSeasonStats
+            .Where(s => s.PlayerId == _leftId)
+            .OrderBy(s => s.Season)
+            .ToListAsync();
+
+        StateHasChanged();
+    }
+
+    async Task OnRightChanged(ChangeEventArgs e)
+    {
+        _rightId = Guid.TryParse(e.Value?.ToString(), out var g) ? g : (Guid?)null;
+        _rightPlayer = null;
+        _rightStats = new();
+
+        if (_rightId is null) return;
+
+        _rightPlayer = _players.FirstOrDefault(p => p.Guid == _rightId);
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _rightStats = await db.TopElevenSeasonStats
+            .Where(s => s.PlayerId == _rightId)
+            .OrderBy(s => s.Season)
+            .ToListAsync();
+
+        StateHasChanged();
+    }
+}

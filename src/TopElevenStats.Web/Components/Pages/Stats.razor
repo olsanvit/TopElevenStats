@@ -1,0 +1,219 @@
+@page "/stats"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@using ApexCharts
+@inject IDbContextFactory<AppDbContextGames> DbFactory
+@inject ToastService Toast
+
+<PageTitle>Statistiky</PageTitle>
+<h3><i class="bi bi-graph-up me-2"></i>Statistiky hráče</h3>
+
+<div class="mb-3" style="max-width:420px">
+    <label class="form-label fw-bold">Hráč</label>
+    <select class="form-select" value="@_selectedPlayerId" @onchange="OnPlayerChanged">
+        <option value="">— vyber hráče —</option>
+        @foreach (var p in _players)
+        {
+            <option value="@p.Guid">@p.Name (@p.Roles) OVR @p.Ovr@(p.IsGoalkeeper ? " · GK" : "")@(p.IsElite ? " · ELITE" : "")</option>
+        }
+    </select>
+</div>
+
+@if (_selectedPlayer is not null && _stats.Count > 0)
+{
+    <div class="mb-2">
+        <span class="fw-bold fs-5">@_selectedPlayer.Name</span>
+        @if (_selectedPlayer.IsGoalkeeper)
+        {
+            <span class="badge bg-success ms-2">GK</span>
+        }
+        @if (_selectedPlayer.IsElite)
+        {
+            <span class="badge bg-warning text-dark ms-2">ELITNÍ</span>
+        }
+        <span class="badge bg-secondary ms-2">OVR @_selectedPlayer.Ovr</span>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-12 col-lg-6">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <ApexChart TItem="TopElevenSeasonStats"
+                               Title="Průměrné hodnocení"
+                               Options="_ratingChartOptions">
+                        <ApexPointSeries TItem="TopElevenSeasonStats"
+                                         Items="_stats"
+                                         Name="Avg Rating"
+                                         XValue="@(s => s.Season)"
+                                         YValue="@(s => s.AvgRating)"
+                                         SeriesType="SeriesType.Line" />
+                        <ApexPointSeries TItem="TopElevenSeasonStats"
+                                         Items="_stats"
+                                         Name="Výhry s hráčem %"
+                                         XValue="@(s => s.Season)"
+                                         YValue="@(s => s.WinRatioWith)"
+                                         SeriesType="SeriesType.Line" />
+                    </ApexChart>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-lg-6">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <ApexChart TItem="TopElevenSeasonStats"
+                               Title="Výkon"
+                               Options="_performanceChartOptions">
+                        @if (_selectedPlayer.IsGoalkeeper)
+                        {
+                            <ApexPointSeries TItem="TopElevenSeasonStats"
+                                             Items="_stats"
+                                             Name="Čistá konta"
+                                             XValue="@(s => s.Season)"
+                                             YValue="@(s => s.CleanSheets ?? 0)"
+                                             SeriesType="SeriesType.Line" />
+                        }
+                        else
+                        {
+                            <ApexPointSeries TItem="TopElevenSeasonStats"
+                                             Items="_stats"
+                                             Name="Góly"
+                                             XValue="@(s => s.Season)"
+                                             YValue="@(s => s.Goals ?? 0)"
+                                             SeriesType="SeriesType.Line" />
+                        }
+                        <ApexPointSeries TItem="TopElevenSeasonStats"
+                                         Items="_stats"
+                                         Name="Asistence"
+                                         XValue="@(s => s.Season)"
+                                         YValue="@(s => s.Assists)"
+                                         SeriesType="SeriesType.Line" />
+                    </ApexChart>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <h5 class="mb-2"><i class="bi bi-table me-1"></i>Přehled sezón</h5>
+    <div class="table-responsive">
+        <table class="table table-sm table-hover table-bordered align-middle">
+            <thead class="table-dark">
+                <tr>
+                    <th>Sezóna</th>
+                    <th>Hodnocení</th>
+                    <th>Zápasy</th>
+                    @if (_selectedPlayer.IsGoalkeeper)
+                    {
+                        <th>Čistá konta</th>
+                    }
+                    else
+                    {
+                        <th>Góly</th>
+                        <th>xG/90</th>
+                    }
+                    <th>Asistence</th>
+                    <th>Klíč. přihr.</th>
+                    <th>Zranění</th>
+                    <th>ŽK</th>
+                    <th>ČK</th>
+                    <th>S hráčem %</th>
+                    <th>Bez hráče %</th>
+                    <th>Týmový průměr %</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var s in _stats)
+                {
+                    <tr>
+                        <td class="fw-bold">@s.Season</td>
+                        <td>@s.AvgRating.ToString("F1")</td>
+                        <td>@s.MatchesPlayed</td>
+                        @if (_selectedPlayer.IsGoalkeeper)
+                        {
+                            <td>@(s.CleanSheets?.ToString() ?? "—")</td>
+                        }
+                        else
+                        {
+                            <td>@(s.Goals?.ToString() ?? "—")</td>
+                            <td>@(s.Xg90?.ToString("F2") ?? "—")</td>
+                        }
+                        <td>@s.Assists</td>
+                        <td>@s.KeyPasses.ToString("F1")</td>
+                        <td>@s.Injuries</td>
+                        <td>@s.YellowCards</td>
+                        <td>@s.RedCards</td>
+                        <td>@s.WinRatioWith</td>
+                        <td>@s.WinRatioWithout</td>
+                        <td>@s.TeamAverage</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+else if (_selectedPlayer is not null && _stats.Count == 0)
+{
+    <div class="alert alert-info">Pro tohoto hráče zatím nejsou žádné statistiky.</div>
+}
+
+@code {
+    List<TopElevenPlayer> _players = new();
+    Guid? _selectedPlayerId;
+    TopElevenPlayer? _selectedPlayer;
+    List<TopElevenSeasonStats> _stats = new();
+
+    ApexChartOptions<TopElevenSeasonStats> _ratingChartOptions = new()
+    {
+        Stroke = new Stroke { Curve = Curve.Smooth, Width = new List<int> { 3, 3 } },
+        Markers = new Markers { Size = new List<int> { 5 } },
+        Xaxis = new XAxis { Title = new AxisTitle { Text = "Sezóna" } },
+        Yaxis = new List<YAxis>
+        {
+            new YAxis { Title = new AxisTitle { Text = "Hodnota" }, DecimalsInFloat = 2 }
+        }
+    };
+
+    ApexChartOptions<TopElevenSeasonStats> _performanceChartOptions = new()
+    {
+        Stroke = new Stroke { Curve = Curve.Smooth, Width = new List<int> { 3, 3 } },
+        Markers = new Markers { Size = new List<int> { 5 } },
+        Xaxis = new XAxis { Title = new AxisTitle { Text = "Sezóna" } },
+        Yaxis = new List<YAxis>
+        {
+            new YAxis { Title = new AxisTitle { Text = "Počet" }, DecimalsInFloat = 0 }
+        }
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _players = await db.TopElevenPlayers
+            .OrderByDescending(p => p.Ovr)
+            .ToListAsync();
+    }
+
+    async Task OnPlayerChanged(ChangeEventArgs e)
+    {
+        _selectedPlayerId = Guid.TryParse(e.Value?.ToString(), out var g) ? g : (Guid?)null;
+        _selectedPlayer = null;
+        _stats = new();
+
+        if (_selectedPlayerId is null) return;
+
+        _selectedPlayer = _players.FirstOrDefault(p => p.Guid == _selectedPlayerId);
+
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            _stats = await db.TopElevenSeasonStats
+                .Where(s => s.PlayerId == _selectedPlayerId)
+                .OrderBy(s => s.Season)
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Toast.ShowError("Chyba", $"Nepodařilo se načíst statistiky: {ex.Message}");
+        }
+
+        StateHasChanged();
+    }
+}

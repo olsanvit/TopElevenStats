@@ -105,17 +105,24 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        await using var db = await DbFactory.CreateDbContextAsync();
-        var account = await db.TopElevenAccounts.FirstOrDefaultAsync();
-        if (account is null) { _loading = false; return; }
-        _season = account.CurrentSeason;
-        _players = await db.TopElevenPlayers.Where(p => p.AccountId == account.Guid).ToListAsync();
-        var stats = await db.TopElevenSeasonStats
-            .Include(s => s.Player)
-            .Where(s => s.Season == _season && s.Player.AccountId == account.Guid)
-            .ToListAsync();
-        _gkStats = stats.Where(s => s.Player.IsGoalkeeper).OrderByDescending(s => s.Player.Ovr).ToList();
-        _outfieldStats = stats.Where(s => !s.Player.IsGoalkeeper).OrderByDescending(s => s.Player.Ovr).ToList();
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var account = await db.TopElevenAccounts.FirstOrDefaultAsync();
+            if (account is null) { _loading = false; return; }
+            _season = account.CurrentSeason;
+            _players = await db.TopElevenPlayers.Where(p => p.AccountId == account.Guid).ToListAsync();
+            var stats = await db.TopElevenSeasonStats
+                .Include(s => s.Player)
+                .Where(s => s.Season == _season && s.Player.AccountId == account.Guid)
+                .ToListAsync();
+            _gkStats = stats.Where(s => s.Player.IsGoalkeeper).OrderByDescending(s => s.Player.Ovr).ToList();
+            _outfieldStats = stats.Where(s => !s.Player.IsGoalkeeper).OrderByDescending(s => s.Player.Ovr).ToList();
+        }
+        catch (Exception ex)
+        {
+            Toast.ShowError("Chyba", $"Nepodařilo se načíst data: {ex.Message}");
+        }
         _loading = false;
     }
 

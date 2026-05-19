@@ -7,6 +7,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TopElevenStats.Web", "src\T
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SharedServices", "src\SharedServices\SharedServices\SharedServices.csproj", "{2C2ABD5A-93C4-4FE6-98D7-602268EC0C7A}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TopElevenStats.Tests", "src\TopElevenStats.Tests\TopElevenStats.Tests.csproj", "{F1A2B3C4-D5E6-7890-ABCD-EF9876543210}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +23,10 @@ Global
 		{2C2ABD5A-93C4-4FE6-98D7-602268EC0C7A}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{2C2ABD5A-93C4-4FE6-98D7-602268EC0C7A}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{2C2ABD5A-93C4-4FE6-98D7-602268EC0C7A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F1A2B3C4-D5E6-7890-ABCD-EF9876543210}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F1A2B3C4-D5E6-7890-ABCD-EF9876543210}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F1A2B3C4-D5E6-7890-ABCD-EF9876543210}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F1A2B3C4-D5E6-7890-ABCD-EF9876543210}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -9,6 +9,7 @@
 @inject UserManager<AppUser> UserManager
 @inject IDbContextFactory<AppDbContextGames> DbFactory
 @inject NavigationManager Nav
+@inject ToastService Toast
 
 <PageTitle>Admin — TopElevenStats</PageTitle>
 
@@ -220,14 +221,22 @@ else
 
     private async Task ChangeSeasonAsync(Guid accountGuid, int delta)
     {
-        await using var db = await DbFactory.CreateDbContextAsync();
-        var acc = await db.TopElevenAccounts.FindAsync(accountGuid);
-        if (acc is null) return;
-        acc.CurrentSeason = Math.Max(1, acc.CurrentSeason + delta);
-        await db.SaveChangesAsync();
-        _accountMsg = $"Sezóna účtu '{acc.Name}' → {acc.CurrentSeason}";
-        await LoadAsync();
-        StateHasChanged();
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var acc = await db.TopElevenAccounts.FindAsync(accountGuid);
+            if (acc is null) return;
+            acc.CurrentSeason = Math.Max(1, acc.CurrentSeason + delta);
+            await db.SaveChangesAsync();
+            _accountMsg = $"Sezóna účtu '{acc.Name}' → {acc.CurrentSeason}";
+            Toast.ShowSuccess("Uloženo", _accountMsg);
+            await LoadAsync();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Toast.ShowError("Chyba", $"Nepodařilo se uložit sezónu: {ex.Message}");
+        }
     }
 
     private void ConfirmDeleteAccount(Guid guid) => _deleteAccountGuid = guid;
@@ -235,17 +244,25 @@ else
     private async Task DeleteAccountAsync()
     {
         if (_deleteAccountGuid is null) return;
-        await using var db = await DbFactory.CreateDbContextAsync();
-        var acc = await db.TopElevenAccounts
-            .Include(a => a.Players).ThenInclude(p => p.SeasonStats)
-            .FirstOrDefaultAsync(a => a.Guid == _deleteAccountGuid);
-        if (acc is null) { _deleteAccountGuid = null; return; }
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var acc = await db.TopElevenAccounts
+                .Include(a => a.Players).ThenInclude(p => p.SeasonStats)
+                .FirstOrDefaultAsync(a => a.Guid == _deleteAccountGuid);
+            if (acc is null) { _deleteAccountGuid = null; return; }
 
-        db.TopElevenAccounts.Remove(acc);
-        await db.SaveChangesAsync();
-        _accountMsg = $"Účet '{acc.Name}' smazán.";
-        _deleteAccountGuid = null;
-        await LoadAsync();
-        StateHasChanged();
+            db.TopElevenAccounts.Remove(acc);
+            await db.SaveChangesAsync();
+            _accountMsg = $"Účet '{acc.Name}' smazán.";
+            Toast.ShowSuccess("Smazáno", _accountMsg);
+            _deleteAccountGuid = null;
+            await LoadAsync();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Toast.ShowError("Chyba", $"Nepodařilo se smazat účet: {ex.Message}");
+        }
     }
 }

@@ -3,6 +3,7 @@
 @attribute [Authorize]
 @using Microsoft.EntityFrameworkCore
 @inject IDbContextFactory<AppDbContextGames> DbFactory
+@inject ToastService Toast
 
 <PageTitle>Srovnání hráčů</PageTitle>
 <h3><i class="bi bi-people me-2"></i>Srovnání hráčů</h3>
@@ -138,11 +139,18 @@ else if (_leftPlayer is not null || _rightPlayer is not null)
 
         _leftPlayer = _players.FirstOrDefault(p => p.Guid == _leftId);
 
-        await using var db = await DbFactory.CreateDbContextAsync();
-        _leftStats = await db.TopElevenSeasonStats
-            .Where(s => s.PlayerId == _leftId)
-            .OrderBy(s => s.Season)
-            .ToListAsync();
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            _leftStats = await db.TopElevenSeasonStats
+                .Where(s => s.PlayerId == _leftId)
+                .OrderBy(s => s.Season)
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Toast.ShowError("Chyba", $"Nepodařilo se načíst statistiky: {ex.Message}");
+        }
 
         StateHasChanged();
     }
@@ -157,11 +165,18 @@ else if (_leftPlayer is not null || _rightPlayer is not null)
 
         _rightPlayer = _players.FirstOrDefault(p => p.Guid == _rightId);
 
-        await using var db = await DbFactory.CreateDbContextAsync();
-        _rightStats = await db.TopElevenSeasonStats
-            .Where(s => s.PlayerId == _rightId)
-            .OrderBy(s => s.Season)
-            .ToListAsync();
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            _rightStats = await db.TopElevenSeasonStats
+                .Where(s => s.PlayerId == _rightId)
+                .OrderBy(s => s.Season)
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Toast.ShowError("Chyba", $"Nepodařilo se načíst statistiky: {ex.Message}");
+        }
 
         StateHasChanged();
     }

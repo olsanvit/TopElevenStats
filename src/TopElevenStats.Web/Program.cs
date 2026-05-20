@@ -98,6 +98,7 @@ builder.Services.AddSession(options =>
     options.Cookie.HttpOnly = true;
     options.Cookie.IsEssential = true;
 });
+builder.Services.AddHealthChecks();
 builder.WebHost.ConfigureKestrel(k =>
 {
     k.Limits.KeepAliveTimeout = TimeSpan.FromMinutes(3);
@@ -146,6 +147,7 @@ app.UseSession();
 app.UseAntiforgery();
 
 app.MapRazorPages();
+app.MapHealthChecks("/health");
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode()

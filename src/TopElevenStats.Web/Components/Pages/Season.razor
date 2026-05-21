@@ -7,7 +7,13 @@
 <PageTitle>Správa sezóny</PageTitle>
 <h3><i class="bi bi-calendar3 me-2"></i>Správa sezóny</h3>
 
-@if (_account is null)
+<ConfirmDialog @ref="_confirmDialog" />
+
+@if (_loading)
+{
+    <PageLoadingSpinner />
+}
+else if (_account is null)
 {
     <div class="alert alert-warning">Nejprve vytvoř účet v sekci Hráči.</div>
 }
@@ -42,7 +48,7 @@ else
                         <td>@s.Count</td>
                         <td>
                             <button class="btn btn-outline-danger btn-sm"
-                                    @onclick="() => DeleteSeasonStats(s.Season)"
+                                    @onclick="() => ConfirmDeleteSeason(s.Season)"
                                     title="Smazat všechny statistiky za sezónu @s.Season">
                                 <i class="bi bi-trash"></i>
                             </button>
@@ -55,10 +61,18 @@ else
 }
 
 @code {
+    private ConfirmDialog _confirmDialog = default!;
+    private int _pendingDeleteSeason;
+
     TopElevenAccount? _account;
     List<(int Season, int Count)> _seasonSummary = new();
+    private bool _loading = true;
 
-    protected override async Task OnInitializedAsync() => await Load();
+    protected override async Task OnInitializedAsync()
+    {
+        await Load();
+        _loading = false;
+    }
 
     async Task Load()
     {
@@ -74,7 +88,17 @@ else
         _seasonSummary = raw.Select(x => (x.Season, x.Count)).ToList();
     }
 
-    async Task DeleteSeasonStats(int season)
+    private async Task ConfirmDeleteSeason(int season)
+    {
+        _pendingDeleteSeason = season;
+        var confirmed = await _confirmDialog.ShowAsync(
+            "Smazat statistiky sezóny",
+            $"Opravdu chcete smazat všechny statistiky za sezónu {season}? Tato akce je nevratná.");
+        if (confirmed)
+            await ExecuteDeleteSeason(_pendingDeleteSeason);
+    }
+
+    private async Task ExecuteDeleteSeason(int season)
     {
         if (_account is null) return;
         await using var db = await DbFactory.CreateDbContextAsync();

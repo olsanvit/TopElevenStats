@@ -13,13 +13,15 @@
 
 <PageTitle>Admin — TopElevenStats</PageTitle>
 
+<ConfirmDialog @ref="_confirmDialog" />
+
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h4 class="m-0">Admin — TopElevenStats</h4>
 </div>
 
 @if (_loading)
 {
-    <div class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+    <PageLoadingSpinner />
 }
 else
 {
@@ -128,7 +130,7 @@ else
                                     <td class="text-end small">@acc.StatsCount</td>
                                     <td class="text-end">
                                         <button class="btn btn-sm btn-outline-danger"
-                                                @onclick="() => ConfirmDeleteAccount(acc.Account.Guid)">
+                                                @onclick="() => RequestDeleteAccount(acc.Account.Guid)">
                                             <i class="bi bi-trash"></i>
                                         </button>
                                     </td>
@@ -140,18 +142,6 @@ else
             </div>
         </div>
     </div>
-
-    <!-- Potvrzení smazání -->
-    @if (_deleteAccountGuid.HasValue)
-    {
-        <div class="alert alert-danger mt-3 d-flex align-items-center justify-content-between">
-            <span>Opravdu smazat tento TE účet včetně všech hráčů a statistik?</span>
-            <div class="d-flex gap-2">
-                <button class="btn btn-sm btn-danger" @onclick="DeleteAccountAsync">Smazat</button>
-                <button class="btn btn-sm btn-secondary" @onclick="() => _deleteAccountGuid = null">Zrušit</button>
-            </div>
-        </div>
-    }
 
     <!-- Top hráči -->
     <div class="card mt-3">
@@ -180,9 +170,11 @@ else
 }
 
 @code {
+    private ConfirmDialog _confirmDialog = default!;
+    private Guid? _pendingDeleteAccountGuid;
+
     private bool _loading = true;
     private string _accountMsg = string.Empty;
-    private Guid? _deleteAccountGuid;
 
     private int _userCount, _accountCount, _playerCount, _seasonStatsCount;
     private List<AppUser> _users = new();
@@ -239,24 +231,30 @@ else
         }
     }
 
-    private void ConfirmDeleteAccount(Guid guid) => _deleteAccountGuid = guid;
-
-    private async Task DeleteAccountAsync()
+    private async Task RequestDeleteAccount(Guid guid)
     {
-        if (_deleteAccountGuid is null) return;
+        _pendingDeleteAccountGuid = guid;
+        var confirmed = await _confirmDialog.ShowAsync(
+            "Smazat TE účet",
+            "Opravdu chcete smazat tento Top Eleven účet včetně všech hráčů a statistik? Tato akce je nevratná.");
+        if (confirmed)
+            await DeleteAccountAsync(_pendingDeleteAccountGuid.Value);
+    }
+
+    private async Task DeleteAccountAsync(Guid guid)
+    {
         try
         {
             await using var db = await DbFactory.CreateDbContextAsync();
             var acc = await db.TopElevenAccounts
                 .Include(a => a.Players).ThenInclude(p => p.SeasonStats)
-                .FirstOrDefaultAsync(a => a.Guid == _deleteAccountGuid);
-            if (acc is null) { _deleteAccountGuid = null; return; }
+                .FirstOrDefaultAsync(a => a.Guid == guid);
+            if (acc is null) return;
 
             db.TopElevenAccounts.Remove(acc);
             await db.SaveChangesAsync();
             _accountMsg = $"Účet '{acc.Name}' smazán.";
             Toast.ShowSuccess("Smazáno", _accountMsg);
-            _deleteAccountGuid = null;
             await LoadAsync();
             StateHasChanged();
         }

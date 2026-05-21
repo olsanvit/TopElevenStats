@@ -7,6 +7,8 @@
 <PageTitle>Hráči</PageTitle>
 <h3><i class="bi bi-people-fill me-2"></i>Hráči</h3>
 
+<ConfirmDialog @ref="_confirmDialog" />
+
 @if (_account is null)
 {
     <div class="alert alert-warning">
@@ -52,43 +54,54 @@ else
         </div>
     }
 
-    <div class="table-responsive">
-        <table class="table table-sm table-hover align-middle">
-            <thead class="table-dark">
-                <tr><th>Jméno</th><th>OVR</th><th>Věk</th><th>Role</th><th>Spec.</th><th>Elitní</th><th></th></tr>
-            </thead>
-            <tbody>
-                @foreach (var p in _players)
-                {
-                    <tr>
-                        <td>@p.Name</td>
-                        <td>@p.Ovr</td>
-                        <td>@p.Age</td>
-                        <td><span class="badge @(p.IsGoalkeeper ? "bg-success" : "bg-primary")">@p.Roles</span></td>
-                        <td>@p.SpecialAbility</td>
-                        <td>@(p.IsElite ? "✓" : "")</td>
-                        <td>
-                            <button class="btn btn-danger btn-sm" @onclick="() => DeletePlayer(p.Guid)">
-                                <i class="bi bi-trash"></i>
-                            </button>
-                        </td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-    </div>
+    @if (_loading)
+    {
+        <PageLoadingSpinner />
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle">
+                <thead class="table-dark">
+                    <tr><th>Jméno</th><th>OVR</th><th>Věk</th><th>Role</th><th>Spec.</th><th>Elitní</th><th></th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var p in _players)
+                    {
+                        <tr>
+                            <td>@p.Name</td>
+                            <td>@p.Ovr</td>
+                            <td>@p.Age</td>
+                            <td><span class="badge @(p.IsGoalkeeper ? "bg-success" : "bg-primary")">@p.Roles</span></td>
+                            <td>@p.SpecialAbility</td>
+                            <td>@(p.IsElite ? "✓" : "")</td>
+                            <td>
+                                <button class="btn btn-danger btn-sm" @onclick="() => ConfirmDelete(p.Guid)">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
 
-    <Paginator TotalItems="_totalItems" PageSize="PageSize" CurrentPage="_page"
-               OnPageChanged="async p => { _page = p; await LoadPlayersAsync(); }" />
+        <Paginator TotalItems="_totalItems" PageSize="PageSize" CurrentPage="_page"
+                   OnPageChanged="async p => { _page = p; await LoadPlayersAsync(); }" />
+    }
 }
 
 @code {
+    private ConfirmDialog _confirmDialog = default!;
+    private Guid _pendingDeleteId;
+
     TopElevenAccount? _account;
     List<TopElevenPlayer> _players = new();
     bool _showForm;
     string _newAccountName = "Můj účet";
     TopElevenPlayer _form = new();
 
+    private bool _loading = true;
     private int _page = 1;
     private const int PageSize = 20;
     private int _totalItems;
@@ -99,6 +112,7 @@ else
         _account = await db.TopElevenAccounts.FirstOrDefaultAsync();
         if (_account is not null)
             await LoadPlayersAsync();
+        _loading = false;
     }
 
     private async Task LoadPlayersAsync()
@@ -139,7 +153,17 @@ else
         Toast.ShowSuccess("Hráč přidán!", string.Empty);
     }
 
-    async Task DeletePlayer(Guid id)
+    private async Task ConfirmDelete(Guid id)
+    {
+        _pendingDeleteId = id;
+        var confirmed = await _confirmDialog.ShowAsync(
+            "Smazat hráče",
+            "Opravdu chcete smazat tohoto hráče? Tato akce je nevratná.");
+        if (confirmed)
+            await ExecuteDelete(_pendingDeleteId);
+    }
+
+    private async Task ExecuteDelete(Guid id)
     {
         await using var db = await DbFactory.CreateDbContextAsync();
         var p = await db.TopElevenPlayers.FindAsync(id);

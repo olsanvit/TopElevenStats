@@ -1,4 +1,7 @@
 using BlazorTopEleven.Components;
+using BlazorTopEleven.Web.Validators;
+using FluentValidation;
+using SharedServices.Models.TopEleven;
 using MercenariesAndBeasts.Infrastructure;
 using MercenariesAndBeasts.Infrastructure.Auth;
 using Microsoft.EntityFrameworkCore;
@@ -99,6 +102,7 @@ builder.Services.AddSession(options =>
     options.Cookie.IsEssential = true;
 });
 builder.Services.AddHealthChecks();
+builder.Services.AddScoped<IValidator<TopElevenPlayer>, TopElevenPlayerValidator>();
 builder.WebHost.ConfigureKestrel(k =>
 {
     k.Limits.KeepAliveTimeout = TimeSpan.FromMinutes(3);
@@ -280,6 +284,8 @@ static async Task EnsureAdminAsync(
     if (!await userManager.IsInRoleAsync(user, adminRole))
         await userManager.AddToRoleAsync(user, adminRole);
 }
+
+public partial class Program { }
 
 // ── No-op IEmailSender ────────────────────────────────────────────────────
 file sealed class NoOpEmailSender : Microsoft.AspNetCore.Identity.UI.Services.IEmailSender

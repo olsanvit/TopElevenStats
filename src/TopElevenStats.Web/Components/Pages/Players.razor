@@ -77,6 +77,9 @@ else
             </tbody>
         </table>
     </div>
+
+    <Paginator TotalItems="_totalItems" PageSize="PageSize" CurrentPage="_page"
+               OnPageChanged="async p => { _page = p; await LoadPlayersAsync(); }" />
 }
 
 @code {
@@ -86,15 +89,30 @@ else
     string _newAccountName = "Můj účet";
     TopElevenPlayer _form = new();
 
+    private int _page = 1;
+    private const int PageSize = 20;
+    private int _totalItems;
+
     protected override async Task OnInitializedAsync()
     {
         await using var db = await DbFactory.CreateDbContextAsync();
         _account = await db.TopElevenAccounts.FirstOrDefaultAsync();
         if (_account is not null)
-            _players = await db.TopElevenPlayers
-                .Where(p => p.AccountId == _account.Guid)
-                .OrderByDescending(p => p.Ovr)
-                .ToListAsync();
+            await LoadPlayersAsync();
+    }
+
+    private async Task LoadPlayersAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        if (_account is null) return;
+        var query = db.TopElevenPlayers
+            .Where(p => p.AccountId == _account.Guid)
+            .OrderByDescending(p => p.Ovr);
+        _totalItems = await query.CountAsync();
+        _players = await query
+            .Skip((_page - 1) * PageSize)
+            .Take(PageSize)
+            .ToListAsync();
     }
 
     async Task CreateAccount()

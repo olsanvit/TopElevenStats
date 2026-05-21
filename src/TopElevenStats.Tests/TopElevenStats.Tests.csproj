@@ -18,8 +18,10 @@
     </PackageReference>
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.0" />
     <PackageReference Include="FluentAssertions" Version="8.4.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.0" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\SharedServices\SharedServices\SharedServices.csproj" />
+    <ProjectReference Include="..\TopElevenStats.Web\TopElevenStats.Web.csproj" />
   </ItemGroup>
 </Project>

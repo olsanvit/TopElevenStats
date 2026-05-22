@@ -3,6 +3,7 @@
 @attribute [Authorize]
 @inject IDbContextFactory<AppDbContextGames> DbFactory
 @inject ToastService Toast
+@inject IJSRuntime JS
 
 <PageTitle>Hráči</PageTitle>
 <h3><i class="bi bi-people-fill me-2"></i>Hráči</h3>
@@ -21,9 +22,12 @@
 }
 else
 {
-    <div class="mb-3">
+    <div class="mb-3 d-flex gap-2 flex-wrap">
         <button class="btn btn-success btn-sm" @onclick="() => _showForm = !_showForm">
             <i class="bi bi-plus-circle me-1"></i>Přidat hráče
+        </button>
+        <button class="btn btn-outline-success btn-sm" @onclick="ExportCsvAsync">
+            <i class="bi bi-download me-1"></i>Export CSV
         </button>
     </div>
 
@@ -172,5 +176,21 @@ else
         await db.SaveChangesAsync();
         _players.RemoveAll(x => x.Guid == id);
         Toast.ShowSuccess("Hráč odstraněn.", string.Empty);
+    }
+
+    private async Task ExportCsvAsync()
+    {
+        if (_account is null) return;
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var allPlayers = await db.TopElevenPlayers
+            .Where(p => p.AccountId == _account.Guid)
+            .OrderBy(p => p.Name)
+            .ToListAsync();
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("Jméno,OVR,Věk,Role,Spec. schopnost,Elitní,Brankář,Občanství");
+        foreach (var p in allPlayers)
+            sb.AppendLine($"\"{p.Name?.Replace("\"", "\"\"")}\",{p.Ovr},{p.Age},\"{p.Roles?.Replace("\"", "\"\"")}\",\"{p.SpecialAbility?.Replace("\"", "\"\"")}\",{p.IsElite},{p.IsGoalkeeper},\"{p.Citizenship?.Replace("\"", "\"\"")}\"");
+        var bytes = System.Text.Encoding.UTF8.GetBytes(sb.ToString());
+        await JS.InvokeVoidAsync("downloadBase64File", "hrace.csv", "text/csv", Convert.ToBase64String(bytes));
     }
 }

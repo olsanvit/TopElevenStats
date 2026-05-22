@@ -1,4 +1,5 @@
 @inject SharedServices.Services.ThemeService ThemeService
+@implements IDisposable
 
 <!DOCTYPE html>
 <html lang="cs" data-bs-theme="@ThemeService.BsThemeAttr">
@@ -21,3 +22,8 @@
     <script src="_framework/blazor.web.js"></script>
 </body>
 </html>
+
+@code {
+    protected override void OnInitialized() => ThemeService.OnChange += StateHasChanged;
+    public void Dispose() => ThemeService.OnChange -= StateHasChanged;
+}

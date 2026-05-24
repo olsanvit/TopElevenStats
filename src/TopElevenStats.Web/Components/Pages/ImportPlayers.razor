@@ -1,0 +1,284 @@
+@page "/import-players"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@inject IDbContextFactory<AppDbContextGames> DbFactory
+@inject ToastService Toast
+@inject IJSRuntime JS
+
+<PageTitle>Import hráčů</PageTitle>
+<h3><i class="bi bi-upload me-2"></i>Import hráčů</h3>
+
+@if (_account is null)
+{
+    <div class="alert alert-warning">
+        Nejprve vytvoř účet na stránce <a href="/players">Hráči</a>.
+    </div>
+}
+else
+{
+    <div class="card mb-3">
+        <div class="card-body">
+            <h6 class="card-title">Instrukce</h6>
+            <p class="mb-1">CSV formát: <code>Jméno,OVR,Věk,Role,Spec. schopnost,Elitní,Brankář,Občanství</code></p>
+            <p class="text-muted small mb-2">Hodnoty bool: True/False, true/false nebo 1/0. První řádek (hlavička) je přeskočen.</p>
+            <button class="btn btn-outline-secondary btn-sm" @onclick="DownloadSampleAsync">
+                <i class="bi bi-download me-1"></i>Stáhnout vzorový soubor
+            </button>
+        </div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-body">
+            <h6 class="card-title">Nahrát CSV soubor</h6>
+            <InputFile OnChange="OnFileSelectedAsync" accept=".csv" class="form-control mb-2" disabled="@_importing" />
+            @if (!string.IsNullOrEmpty(_fileName))
+            {
+                <p class="text-muted small mb-0"><i class="bi bi-file-earmark-text me-1"></i>@_fileName</p>
+            }
+        </div>
+    </div>
+
+    @if (_parseErrors > 0)
+    {
+        <div class="alert alert-warning">
+            <i class="bi bi-exclamation-triangle me-1"></i>
+            @_parseErrors řádků bylo přeskočeno kvůli chybám při parsování.
+        </div>
+    }
+
+    @if (_preview.Count > 0)
+    {
+        <div class="card mb-3">
+            <div class="card-body">
+                <h6 class="card-title">Náhled (@_preview.Count z celkem @_allParsed.Count hráčů)</h6>
+                @if (_allParsed.Count > _preview.Count)
+                {
+                    <p class="text-muted small mb-2">… a dalších @(_allParsed.Count - _preview.Count) řádků</p>
+                }
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover align-middle">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Jméno</th>
+                                <th>OVR</th>
+                                <th>Věk</th>
+                                <th>Role</th>
+                                <th>Spec. schopnost</th>
+                                <th>Elitní</th>
+                                <th>Brankář</th>
+                                <th>Občanství</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var p in _preview)
+                            {
+                                <tr>
+                                    <td>@p.Name</td>
+                                    <td>@p.Ovr</td>
+                                    <td>@p.Age</td>
+                                    <td><span class="badge @(p.IsGoalkeeper ? "bg-success" : "bg-primary")">@p.Roles</span></td>
+                                    <td>@p.SpecialAbility</td>
+                                    <td>@(p.IsElite ? "✓" : "")</td>
+                                    <td>@(p.IsGoalkeeper ? "✓" : "")</td>
+                                    <td>@p.Citizenship</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <button class="btn btn-success" @onclick="ImportAsync" disabled="@_importing">
+                    @if (_importing)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                    }
+                    else
+                    {
+                        <i class="bi bi-cloud-upload me-1"></i>
+                    }
+                    Importovat @_allParsed.Count hráčů
+                </button>
+                <button class="btn btn-secondary ms-2" @onclick="Reset" disabled="@_importing">Zrušit</button>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    TopElevenAccount? _account;
+
+    string? _fileName;
+    List<TopElevenPlayer> _allParsed = new();
+    List<TopElevenPlayer> _preview = new();
+    int _parseErrors;
+    bool _importing;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _account = await db.TopElevenAccounts.FirstOrDefaultAsync();
+    }
+
+    private async Task DownloadSampleAsync()
+    {
+        var sample = "Jméno,OVR,Věk,Role,Spec. schopnost,Elitní,Brankář,Občanství\n" +
+                     "Jan Novák,85,24,ST,Střelec,True,False,CZ\n" +
+                     "Petr Svoboda,78,28,GK,,False,True,SK\n" +
+                     "\"Tomáš Dvořák\",72,31,\"AML,ML\",Dribler,False,False,CZ\n";
+        var bytes = System.Text.Encoding.UTF8.GetBytes(sample);
+        await JS.InvokeVoidAsync("downloadBase64File", "vzor_hrace.csv", "text/csv", Convert.ToBase64String(bytes));
+    }
+
+    private async Task OnFileSelectedAsync(InputFileChangeEventArgs e)
+    {
+        Reset();
+        var file = e.File;
+        _fileName = file.Name;
+
+        try
+        {
+            using var stream = file.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024);
+            using var reader = new System.IO.StreamReader(stream, System.Text.Encoding.UTF8);
+            var content = await reader.ReadToEndAsync();
+            ParseCsv(content);
+        }
+        catch (Exception ex)
+        {
+            Toast.ShowError("Chyba čtení", ex.Message);
+        }
+    }
+
+    private void ParseCsv(string content)
+    {
+        _allParsed = new();
+        _parseErrors = 0;
+
+        var lines = content.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        // skip header (first line)
+        for (int i = 1; i < lines.Length; i++)
+        {
+            var line = lines[i].TrimEnd('\r');
+            if (string.IsNullOrWhiteSpace(line)) continue;
+
+            var fields = SplitCsvLine(line);
+            if (fields.Count < 8)
+            {
+                _parseErrors++;
+                continue;
+            }
+
+            try
+            {
+                int.TryParse(fields[1], out var ovr);
+                int.TryParse(fields[2], out var age);
+                bool isElite = ParseBool(fields[5]);
+                bool isGk = ParseBool(fields[6]);
+
+                _allParsed.Add(new TopElevenPlayer
+                {
+                    Name = fields[0],
+                    Ovr = ovr,
+                    Age = age,
+                    Roles = fields[3],
+                    SpecialAbility = fields[4],
+                    IsElite = isElite,
+                    IsGoalkeeper = isGk,
+                    Citizenship = fields[7],
+                    AccountId = _account!.Guid
+                });
+            }
+            catch
+            {
+                _parseErrors++;
+            }
+        }
+
+        _preview = _allParsed.Take(20).ToList();
+    }
+
+    // Minimal quoted-CSV splitter — no external libraries
+    private static List<string> SplitCsvLine(string line)
+    {
+        var fields = new List<string>();
+        var current = new System.Text.StringBuilder();
+        bool inQuotes = false;
+
+        for (int i = 0; i < line.Length; i++)
+        {
+            char c = line[i];
+            if (inQuotes)
+            {
+                if (c == '"')
+                {
+                    if (i + 1 < line.Length && line[i + 1] == '"')
+                    {
+                        current.Append('"');
+                        i++;
+                    }
+                    else
+                    {
+                        inQuotes = false;
+                    }
+                }
+                else
+                {
+                    current.Append(c);
+                }
+            }
+            else
+            {
+                if (c == '"')
+                {
+                    inQuotes = true;
+                }
+                else if (c == ',')
+                {
+                    fields.Add(current.ToString().Trim());
+                    current.Clear();
+                }
+                else
+                {
+                    current.Append(c);
+                }
+            }
+        }
+        fields.Add(current.ToString().Trim());
+        return fields;
+    }
+
+    private static bool ParseBool(string value)
+    {
+        value = value.Trim();
+        return value == "1" || value.Equals("true", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task ImportAsync()
+    {
+        if (_account is null || _allParsed.Count == 0) return;
+        _importing = true;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            db.TopElevenPlayers.AddRange(_allParsed);
+            await db.SaveChangesAsync();
+            Toast.ShowSuccess($"Importováno {_allParsed.Count} hráčů.", string.Empty);
+            Reset();
+        }
+        catch (Exception ex)
+        {
+            Toast.ShowError("Chyba importu", ex.Message);
+        }
+        finally
+        {
+            _importing = false;
+        }
+    }
+
+    private void Reset()
+    {
+        _fileName = null;
+        _allParsed = new();
+        _preview = new();
+        _parseErrors = 0;
+    }
+}

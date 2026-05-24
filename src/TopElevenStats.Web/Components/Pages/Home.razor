@@ -18,6 +18,21 @@ else if (_players.Count == 0)
 }
 else
 {
+    @if (_ovrGroups.Count > 0)
+    {
+        <div class="card mb-4" style="max-width:600px">
+            <div class="card-body">
+                <ApexChart TItem="OvrGroup" Title="Distribuce OVR hráčů">
+                    <ApexPointSeries TItem="OvrGroup"
+                                     Name="Hráči"
+                                     XValue="@(e => e.Label)"
+                                     YValue="@(e => (decimal?)e.Count)"
+                                     SeriesType="SeriesType.Bar" />
+                </ApexChart>
+            </div>
+        </div>
+    }
+
     @if (_gkStats.Count > 0)
     {
         <h5 class="mt-3"><i class="bi bi-shield-fill me-2"></i>Brankáři</h5>
@@ -97,11 +112,14 @@ else
 }
 
 @code {
+    record OvrGroup(string Label, int Count);
+
     bool _loading = true;
     int _season;
     List<TopElevenPlayer> _players = new();
     List<TopElevenSeasonStats> _gkStats = new();
     List<TopElevenSeasonStats> _outfieldStats = new();
+    List<OvrGroup> _ovrGroups = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -112,6 +130,14 @@ else
             if (account is null) { _loading = false; return; }
             _season = account.CurrentSeason;
             _players = await db.TopElevenPlayers.Where(p => p.AccountId == account.Guid).ToListAsync();
+            _ovrGroups = new List<OvrGroup>
+            {
+                new("60–65", _players.Count(p => p.Ovr >= 60 && p.Ovr < 65)),
+                new("65–70", _players.Count(p => p.Ovr >= 65 && p.Ovr < 70)),
+                new("70–75", _players.Count(p => p.Ovr >= 70 && p.Ovr < 75)),
+                new("75–80", _players.Count(p => p.Ovr >= 75 && p.Ovr < 80)),
+                new("80+",   _players.Count(p => p.Ovr >= 80)),
+            }.Where(g => g.Count > 0).ToList();
             var stats = await db.TopElevenSeasonStats
                 .Include(s => s.Player)
                 .Where(s => s.Season == _season && s.Player.AccountId == account.Guid)

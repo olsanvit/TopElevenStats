@@ -58,6 +58,26 @@ else
         </div>
     }
 
+    <div class="row g-2 mb-3 align-items-end">
+        <div class="col-sm-5">
+            <label class="form-label mb-1">Hledat jménem</label>
+            <input class="form-control form-control-sm" placeholder="Jméno hráče…"
+                   @bind="_search" @bind:event="oninput" @oninput="OnSearchChanged" />
+        </div>
+        <div class="col-auto d-flex align-items-center gap-3 pt-3">
+            <div class="form-check mb-0">
+                <input class="form-check-input" type="checkbox" id="filterElite"
+                       @bind="_filterElite" @bind:after="OnSearchChanged" />
+                <label class="form-check-label" for="filterElite">Elitní</label>
+            </div>
+            <div class="form-check mb-0">
+                <input class="form-check-input" type="checkbox" id="filterGk"
+                       @bind="_filterGk" @bind:after="OnSearchChanged" />
+                <label class="form-check-label" for="filterGk">Brankář</label>
+            </div>
+        </div>
+    </div>
+
     @if (_loading)
     {
         <PageLoadingSpinner />
@@ -110,6 +130,10 @@ else
     private const int PageSize = 20;
     private int _totalItems;
 
+    string _search = "";
+    bool _filterElite;
+    bool _filterGk;
+
     protected override async Task OnInitializedAsync()
     {
         await using var db = await DbFactory.CreateDbContextAsync();
@@ -125,12 +149,26 @@ else
         if (_account is null) return;
         var query = db.TopElevenPlayers
             .Where(p => p.AccountId == _account.Guid)
-            .OrderByDescending(p => p.Ovr);
+            .AsQueryable();
+        if (!string.IsNullOrWhiteSpace(_search))
+            query = query.Where(p => p.Name.Contains(_search));
+        if (_filterElite)
+            query = query.Where(p => p.IsElite);
+        if (_filterGk)
+            query = query.Where(p => p.IsGoalkeeper);
+        query = query.OrderByDescending(p => p.Ovr);
         _totalItems = await query.CountAsync();
         _players = await query
             .Skip((_page - 1) * PageSize)
             .Take(PageSize)
             .ToListAsync();
+    }
+
+    private async Task OnSearchChanged()
+    {
+        _page = 1;
+        await LoadPlayersAsync();
+        StateHasChanged();
     }
 
     async Task CreateAccount()

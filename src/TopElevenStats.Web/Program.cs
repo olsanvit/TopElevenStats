@@ -16,6 +16,8 @@ using Serilog.Sinks.PostgreSQL.ColumnWriters;
 using Services;
 using SharedServices;
 using SharedServices.Services;
+using SharedServices.Models.Achievement;
+using TopElevenStats.Web.Achievements;
 using Blazored.LocalStorage;
 using Blazored.Modal;
 using Blazored.SessionStorage;
@@ -86,6 +88,13 @@ builder.Services.AddSingleton<Microsoft.AspNetCore.Identity.UI.Services.IEmailSe
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddCors();
 builder.Services.AddScoped<ToastService>();
+builder.Services.AddScoped<AchievementService>(sp =>
+    new AchievementService(
+        sp.GetRequiredService<ToastService>(),
+        sp.GetRequiredService<IWebHostEnvironment>())
+    {
+        Definitions = TopElevenAchievements.All
+    });
 builder.Services.AddScoped<AlertService>();
 builder.Services.AddBlazoredModal();
 builder.Services.AddBlazoredLocalStorage();

@@ -4,6 +4,7 @@
 @inject IDbContextFactory<AppDbContextGames> DbFactory
 @inject ToastService Toast
 @inject IJSRuntime JS
+@inject AchievementService Achievements
 
 <PageTitle>Hráči</PageTitle>
 <h3><i class="bi bi-people-fill me-2"></i>Hráči</h3>
@@ -169,6 +170,9 @@ else
         _page = 1;
         await LoadPlayersAsync();
         StateHasChanged();
+        if (!string.IsNullOrWhiteSpace(_search)) await Achievements.CheckAsync("SEARCH_PLAYERS");
+        if (_filterElite) await Achievements.CheckAsync("FILTER_ELITE");
+        if (_filterGk) await Achievements.CheckAsync("FILTER_GK");
     }
 
     async Task CreateAccount()
@@ -190,9 +194,43 @@ else
         db.TopElevenPlayers.Add(_form);
         await db.SaveChangesAsync();
         _players.Insert(0, _form);
+        var savedForm = _form;
         _form = new();
         _showForm = false;
         Toast.ShowSuccess("Hráč přidán!", string.Empty);
+
+        // Achievement checks
+        await Achievements.CheckAsync("FIRST_PLAYER");
+        var count = await db.TopElevenPlayers.CountAsync(p => p.AccountId == _account!.Guid);
+        if (count >= 5) await Achievements.CheckAsync("PLAYERS_5");
+        if (count >= 10) await Achievements.CheckAsync("PLAYERS_10");
+        if (count >= 25) await Achievements.CheckAsync("PLAYERS_25");
+        if (count >= 50) await Achievements.CheckAsync("PLAYERS_50");
+        if (count >= 100) await Achievements.CheckAsync("PLAYERS_100");
+        if (count >= 200) await Achievements.CheckAsync("PLAYERS_200");
+        if (count >= 500) await Achievements.CheckAsync("PLAYERS_500");
+        if (savedForm.IsElite) await Achievements.CheckAsync("FIRST_ELITE");
+        if (savedForm.IsGoalkeeper) await Achievements.CheckAsync("FIRST_GK");
+        if (!string.IsNullOrEmpty(savedForm.Citizenship) && savedForm.Citizenship.Equals("CZE", StringComparison.OrdinalIgnoreCase))
+            await Achievements.CheckAsync("CITIZENSHIP_CZE");
+        if (!string.IsNullOrEmpty(savedForm.Roles) && savedForm.Roles.Contains(','))
+            await Achievements.CheckAsync("MULTI_ROLE");
+        if (savedForm.IsGoalkeeper && savedForm.Age < 22) await Achievements.CheckAsync("GK_YOUNG");
+        if (savedForm.IsGoalkeeper && savedForm.Age > 35) await Achievements.CheckAsync("GK_VETERAN");
+        if (savedForm.IsGoalkeeper && string.IsNullOrEmpty(savedForm.SpecialAbility)) await Achievements.CheckAsync("GK_NO_ABILITY");
+        if (savedForm.IsGoalkeeper && !string.IsNullOrEmpty(savedForm.SpecialAbility)) await Achievements.CheckAsync("GK_ABILITY");
+        if (savedForm.IsElite && savedForm.IsGoalkeeper) await Achievements.CheckAsync("ELITE_GK");
+        if (savedForm.IsElite && !string.IsNullOrEmpty(savedForm.Citizenship) && savedForm.Citizenship.Equals("CZE", StringComparison.OrdinalIgnoreCase))
+            await Achievements.CheckAsync("ELITE_CZECH");
+        if (savedForm.IsElite && !string.IsNullOrEmpty(savedForm.SpecialAbility)) await Achievements.CheckAsync("ELITE_SPECIAL");
+        // OVR checks
+        if (savedForm.Ovr >= 70) await Achievements.CheckAsync("OVR_70");
+        if (savedForm.Ovr >= 75) await Achievements.CheckAsync("OVR_75");
+        if (savedForm.Ovr >= 80) await Achievements.CheckAsync("OVR_80");
+        if (savedForm.Ovr >= 85) await Achievements.CheckAsync("OVR_85");
+        if (savedForm.Ovr >= 90) await Achievements.CheckAsync("OVR_90");
+        if (savedForm.Ovr >= 95) await Achievements.CheckAsync("OVR_95");
+        if (savedForm.Ovr >= 100) await Achievements.CheckAsync("OVR_100");
     }
 
     private async Task ConfirmDelete(Guid id)
@@ -214,6 +252,7 @@ else
         await db.SaveChangesAsync();
         _players.RemoveAll(x => x.Guid == id);
         Toast.ShowSuccess("Hráč odstraněn.", string.Empty);
+        await Achievements.CheckAsync("DELETE_PLAYER");
     }
 
     private async Task ExportCsvAsync()
@@ -230,5 +269,7 @@ else
             sb.AppendLine($"\"{p.Name?.Replace("\"", "\"\"")}\",{p.Ovr},{p.Age},\"{p.Roles?.Replace("\"", "\"\"")}\",\"{p.SpecialAbility?.Replace("\"", "\"\"")}\",{p.IsElite},{p.IsGoalkeeper},\"{p.Citizenship?.Replace("\"", "\"\"")}\"");
         var bytes = System.Text.Encoding.UTF8.GetBytes(sb.ToString());
         await JS.InvokeVoidAsync("downloadBase64File", "hrace.csv", "text/csv", Convert.ToBase64String(bytes));
+        await Achievements.CheckAsync("FIRST_EXPORT");
+        await Achievements.CheckAsync("EXPORT_CSV");
     }
 }

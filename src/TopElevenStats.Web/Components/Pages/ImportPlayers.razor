@@ -4,6 +4,7 @@
 @inject IDbContextFactory<AppDbContextGames> DbFactory
 @inject ToastService Toast
 @inject IJSRuntime JS
+@inject AchievementService Achievements
 
 <PageTitle>Import hráčů</PageTitle>
 <h3><i class="bi bi-upload me-2"></i>Import hráčů</h3>
@@ -262,6 +263,9 @@ else
             db.TopElevenPlayers.AddRange(_allParsed);
             await db.SaveChangesAsync();
             Toast.ShowSuccess($"Importováno {_allParsed.Count} hráčů.", string.Empty);
+            await Achievements.CheckAsync("FIRST_IMPORT");
+            await Achievements.CheckAsync("IMPORT_CSV");
+            if (_allParsed.Count >= 50) await Achievements.CheckAsync("IMPORT_50");
             Reset();
         }
         catch (Exception ex)

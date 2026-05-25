@@ -3,111 +3,198 @@
 @inject ToastService Toast
 @inject AchievementService Achievements
 
-<PageTitle>Top Eleven Stats – Dashboard</PageTitle>
+<PageTitle>Top Eleven Stats — Dashboard</PageTitle>
 
-<div class="d-flex align-items-center justify-content-between mb-3">
-    <h3><i class="bi bi-trophy-fill text-warning me-2"></i>Sezóna @_season – statistiky</h3>
+<!-- Page header -->
+<div class="ui-page-header ui-anim-fade-up">
+    <h3>
+        <i class="bi bi-trophy-fill"></i>
+        Sezóna @_season
+    </h3>
+    <span class="badge bg-secondary text-muted small">Top Eleven Stats</span>
 </div>
 
 @if (_loading)
 {
-    <div class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+    <div class="ui-anim-fade-up d-flex align-items-center gap-2 mt-4">
+        <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+        <span class="text-muted">Načítám statistiky…</span>
+    </div>
 }
 else if (_players.Count == 0)
 {
-    <div class="alert alert-info">Žádní hráči v databázi. Nejdříve přidej hráče v sekci <a href="/players">Hráči</a>.</div>
+    <div class="ui-panel ui-anim-fade-up">
+        <div class="d-flex align-items-center gap-3 py-2">
+            <i class="bi bi-info-circle text-accent fs-4"></i>
+            <div>
+                <div class="fw-semibold">Žádní hráči v databázi</div>
+                <div class="text-muted small">Nejdříve přidej hráče v sekci <a href="/players">Hráči</a>.</div>
+            </div>
+        </div>
+    </div>
 }
 else
 {
-    @if (_ovrGroups.Count > 0)
+    <!-- Stats row -->
+    <div class="row g-3 mb-4 ui-anim-fade-up">
+        <div class="col-6 col-lg-3">
+            <UiStats Label="Hráči v kádru"
+                     Value="@_players.Count.ToString("N0")"
+                     Icon="bi-people-fill"
+                     IconBgClass="icon-emerald" />
+        </div>
+        <div class="col-6 col-lg-3">
+            <UiStats Label="Prům. OVR"
+                     Value="@(_players.Any() ? _players.Average(p => p.Ovr).ToString("F1") : "—")"
+                     Icon="bi-graph-up"
+                     IconBgClass="icon-accent" />
+        </div>
+        <div class="col-6 col-lg-3">
+            <UiStats Label="Elitní hráči"
+                     Value="@_players.Count(p => p.IsElite).ToString("N0")"
+                     Icon="bi-star-fill"
+                     IconBgClass="icon-amber" />
+        </div>
+        <div class="col-6 col-lg-3">
+            <UiStats Label="Achievementy"
+                     Value="@($"{Achievements.GetAllStatus().Count(s => s.Unlock != null)}/{Achievements.Definitions.Count}")"
+                     Icon="bi-trophy-fill"
+                     IconBgClass="icon-purple" />
+        </div>
+    </div>
+
+    <!-- OVR distribution chart + quick links -->
+    <div class="row g-3 mb-4">
+        @if (_ovrGroups.Count > 0)
+        {
+            <div class="col-lg-8">
+                <div class="ui-panel ui-anim-fade-up">
+                    <div class="ui-panel-header">
+                        <span class="ui-panel-title">
+                            <i class="bi bi-bar-chart-fill text-accent"></i>
+                            Distribuce OVR hráčů
+                        </span>
+                    </div>
+                    <ApexChart TItem="OvrGroup" Options="_chartOptions">
+                        <ApexPointSeries TItem="OvrGroup" Name="Hráči"
+                            Items="_ovrGroups"
+                            XValue="@(e => e.Label)"
+                            YValue="@(e => (decimal?)e.Count)"
+                            SeriesType="SeriesType.Bar" />
+                    </ApexChart>
+                </div>
+            </div>
+        }
+
+        <div class="col-lg-4">
+            <div class="d-flex flex-column gap-3 ui-anim-fade-up">
+                <QuickLinkCard Href="/players"
+                               Icon="bi-people-fill"
+                               Title="Hráči"
+                               Description="Správa kádru a statistik"
+                               IconClass="icon-emerald" />
+                <QuickLinkCard Href="/stats"
+                               Icon="bi-bar-chart-line"
+                               Title="Statistiky"
+                               Description="Detailní grafy sezóny"
+                               IconClass="icon-accent" />
+                <QuickLinkCard Href="/achievements"
+                               Icon="bi-trophy-fill"
+                               Title="Achievementy"
+                               Description="@($"{Achievements.TotalPoints} bodů nashromážděno")"
+                               IconClass="icon-purple" />
+            </div>
+        </div>
+    </div>
+
+    <!-- Brankáři -->
+    @if (_gkStats.Count > 0)
     {
-        <div class="card mb-4" style="max-width:600px">
-            <div class="card-body">
-                <ApexChart TItem="OvrGroup" Title="Distribuce OVR hráčů">
-                    <ApexPointSeries TItem="OvrGroup"
-                                     Name="Hráči"
-                                     XValue="@(e => e.Label)"
-                                     YValue="@(e => (decimal?)e.Count)"
-                                     SeriesType="SeriesType.Bar" />
-                </ApexChart>
+        <div class="ui-panel ui-anim-fade-up mb-3">
+            <div class="ui-panel-header">
+                <span class="ui-panel-title">
+                    <i class="bi bi-shield-fill"></i>
+                    Brankáři
+                </span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover table-sm mb-0 align-middle">
+                    <thead>
+                        <tr>
+                            <th>Hráč</th><th>OVR</th><th>Věk</th>
+                            <th>Hod.</th><th>Zápasy</th><th>Čistá konta</th>
+                            <th>Žl.</th><th>Čerr.</th><th>S hráčem</th><th>Bez hráče</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var s in _gkStats)
+                        {
+                            <tr>
+                                <td class="fw-semibold">@s.Player.Name</td>
+                                <td>@s.Player.Ovr</td>
+                                <td>@s.Player.Age</td>
+                                <td>@s.AvgRating.ToString("F1")</td>
+                                <td>@s.MatchesPlayed</td>
+                                <td>@s.CleanSheets</td>
+                                <td>@s.YellowCards</td>
+                                <td>@s.RedCards</td>
+                                <td><span class="badge @WinBadge(s.WinRatioWith)">@s.WinRatioWith %</span></td>
+                                <td><span class="badge @WinBadge(s.WinRatioWithout)">@s.WinRatioWithout %</span></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
             </div>
         </div>
     }
 
-    @if (_gkStats.Count > 0)
-    {
-        <h5 class="mt-3"><i class="bi bi-shield-fill me-2"></i>Brankáři</h5>
-        <div class="table-responsive mb-4">
-            <table class="table table-sm table-hover align-middle">
-                <thead class="table-dark">
-                    <tr>
-                        <th>Hráč</th><th>OVR</th><th>Věk</th>
-                        <th>Hod.</th><th>Zápasy</th><th>Čistá konta</th>
-                        <th>Žl.</th><th>Čerr.</th><th>S hráčem</th><th>Bez hráče</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var s in _gkStats)
-                    {
-                        <tr>
-                            <td>@s.Player.Name</td>
-                            <td>@s.Player.Ovr</td>
-                            <td>@s.Player.Age</td>
-                            <td>@s.AvgRating.ToString("F1")</td>
-                            <td>@s.MatchesPlayed</td>
-                            <td>@s.CleanSheets</td>
-                            <td>@s.YellowCards</td>
-                            <td>@s.RedCards</td>
-                            <td><span class="badge @WinBadge(s.WinRatioWith)">@s.WinRatioWith %</span></td>
-                            <td><span class="badge @WinBadge(s.WinRatioWithout)">@s.WinRatioWithout %</span></td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
-    }
-
+    <!-- Hráči v poli -->
     @if (_outfieldStats.Count > 0)
     {
-        <h5><i class="bi bi-person-running me-2"></i>Hráči v poli</h5>
-        <div class="table-responsive">
-            <table class="table table-sm table-hover align-middle">
-                <thead class="table-dark">
-                    <tr>
-                        <th>Hráč</th><th>OVR</th><th>Role</th><th>Věk</th>
-                        <th>Hod.</th><th>Zápasy</th><th>Góly</th><th>xG90</th>
-                        <th>Asist.</th><th>Klíč. přihr.</th>
-                        <th>Žl.</th><th>Čerr.</th><th>S hráčem</th><th>Bez hráče</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var s in _outfieldStats)
-                    {
+        <div class="ui-panel ui-anim-fade-up">
+            <div class="ui-panel-header">
+                <span class="ui-panel-title">
+                    <i class="bi bi-person-running"></i>
+                    Hráči v poli
+                </span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover table-sm mb-0 align-middle">
+                    <thead>
                         <tr>
-                            <td>
-                                @s.Player.Name
-                                @if (s.Player.IsElite)
-                                {
-                                    <span class="badge bg-warning text-dark ms-1">ELITNÍ</span>
-                                }
-                            </td>
-                            <td>@s.Player.Ovr</td>
-                            <td><span class="badge bg-secondary">@s.Player.Roles</span></td>
-                            <td>@s.Player.Age</td>
-                            <td>@s.AvgRating.ToString("F1")</td>
-                            <td>@s.MatchesPlayed</td>
-                            <td>@s.Goals</td>
-                            <td>@(s.Xg90?.ToString("F1") ?? "-")</td>
-                            <td>@s.Assists</td>
-                            <td>@s.KeyPasses.ToString("F1")</td>
-                            <td>@s.YellowCards</td>
-                            <td>@s.RedCards</td>
-                            <td><span class="badge @WinBadge(s.WinRatioWith)">@s.WinRatioWith %</span></td>
-                            <td><span class="badge @WinBadge(s.WinRatioWithout)">@s.WinRatioWithout %</span></td>
+                            <th>Hráč</th><th>OVR</th><th>Role</th><th>Věk</th>
+                            <th>Hod.</th><th>Zápasy</th><th>Góly</th><th>xG90</th>
+                            <th>Asist.</th><th>Žl.</th><th>Čerr.</th><th>S hráčem</th><th>Bez hráče</th>
                         </tr>
-                    }
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        @foreach (var s in _outfieldStats)
+                        {
+                            <tr>
+                                <td class="fw-semibold">
+                                    @s.Player.Name
+                                    @if (s.Player.IsElite)
+                                    {
+                                        <span class="badge bg-warning text-dark ms-1">ELITNÍ</span>
+                                    }
+                                </td>
+                                <td>@s.Player.Ovr</td>
+                                <td><span class="badge bg-secondary">@s.Player.Roles</span></td>
+                                <td>@s.Player.Age</td>
+                                <td>@s.AvgRating.ToString("F1")</td>
+                                <td>@s.MatchesPlayed</td>
+                                <td>@s.Goals</td>
+                                <td>@(s.Xg90?.ToString("F1") ?? "—")</td>
+                                <td>@s.Assists</td>
+                                <td>@s.YellowCards</td>
+                                <td>@s.RedCards</td>
+                                <td><span class="badge @WinBadge(s.WinRatioWith)">@s.WinRatioWith %</span></td>
+                                <td><span class="badge @WinBadge(s.WinRatioWithout)">@s.WinRatioWithout %</span></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
         </div>
     }
 }
@@ -121,6 +208,15 @@ else
     List<TopElevenSeasonStats> _gkStats = new();
     List<TopElevenSeasonStats> _outfieldStats = new();
     List<OvrGroup> _ovrGroups = new();
+
+    private readonly ApexChartOptions<OvrGroup> _chartOptions = new()
+    {
+        PlotOptions = new PlotOptions { Bar = new PlotOptionsBar { Horizontal = false } },
+        Chart  = new Chart  { Toolbar = new Toolbar { Show = false }, Background = "transparent" },
+        Theme  = new ApexCharts.Theme { Mode = Mode.Dark },
+        Colors = ["#6366f1"],
+        Grid   = new Grid  { BorderColor = "rgba(255,255,255,0.08)" }
+    };
 
     protected override async Task OnInitializedAsync()
     {

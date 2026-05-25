@@ -22,6 +22,8 @@ using Blazored.LocalStorage;
 using Blazored.Modal;
 using Blazored.SessionStorage;
 using ApexCharts;
+using MudBlazor.Services;
+using Radzen;
 using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -87,6 +89,9 @@ builder.Services.AddSingleton<Microsoft.AspNetCore.Identity.UI.Services.IEmailSe
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddCors();
+builder.Services.AddMudServices();
+builder.Services.AddRadzenComponents();
+builder.Services.AddScoped<UiLibraryService>();
 builder.Services.AddScoped<ToastService>();
 builder.Services.AddScoped<AchievementService>(sp =>
     new AchievementService(
@@ -102,7 +107,7 @@ builder.Services.AddBlazoredSessionStorage();
 builder.Services.AddApexCharts();
 builder.Services.AddScoped<ErrorService<AppDbContextGames>>();
 builder.Services.AddScoped<EfCoreService<AppDbContextGames>>();
-builder.Services.AddSingleton<ThemeService>(_ => new ThemeService(builder.Configuration));
+builder.Services.AddSingleton<SharedServices.Services.ThemeService>(_ => new SharedServices.Services.ThemeService(builder.Configuration));
 builder.Services.AddDistributedMemoryCache();
 builder.Services.AddSession(options =>
 {

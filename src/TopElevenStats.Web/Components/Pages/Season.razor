@@ -4,59 +4,94 @@
 @inject IDbContextFactory<AppDbContextGames> DbFactory
 @inject ToastService Toast
 
-<PageTitle>Správa sezóny</PageTitle>
-<h3><i class="bi bi-calendar3 me-2"></i>Správa sezóny</h3>
+<PageTitle>Správa sezóny — TopElevenStats</PageTitle>
+
+<div class="ui-page-header ui-anim-fade-up">
+    <h3><i class="bi bi-calendar3"></i> Správa sezóny</h3>
+</div>
 
 <ConfirmDialog @ref="_confirmDialog" />
 
 @if (_loading)
 {
-    <PageLoadingSpinner />
+    <div class="ui-anim-fade-up d-flex align-items-center gap-2 mt-3">
+        <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+        <span class="text-muted">Načítám sezónu…</span>
+    </div>
 }
 else if (_account is null)
 {
-    <div class="alert alert-warning">Nejprve vytvoř účet v sekci Hráči.</div>
+    <div class="ui-panel ui-anim-fade-up p-3">
+        <div class="d-flex align-items-center gap-2 text-warning">
+            <i class="bi bi-exclamation-triangle-fill"></i>
+            <span>Nejprve vytvoř účet v sekci Hráči.</span>
+        </div>
+    </div>
 }
 else
 {
-    <div class="card mb-4" style="max-width:400px">
-        <div class="card-body text-center">
-            <h5 class="card-title">Aktuální sezóna</h5>
-            <div class="display-4 fw-bold text-primary mb-3">@_account.CurrentSeason</div>
-            <p class="text-muted">Po dokončení importu statistik z Top Eleven klikni na tlačítko níže.</p>
-            <button class="btn btn-warning btn-lg" @onclick="IncreaseSeason">
+    <!-- Current season card -->
+    <div class="ui-panel ui-anim-fade-up">
+        <div class="ui-panel-header">
+            <span class="ui-panel-title">
+                <i class="bi bi-calendar-check text-accent"></i>
+                Aktuální sezóna
+            </span>
+        </div>
+        <div class="p-4 text-center">
+            <div class="fw-bold mb-2" style="font-size:3.5rem;color:var(--ui-accent)">@_account.CurrentSeason</div>
+            <p class="text-muted small mb-4">Po dokončení importu statistik z Top Eleven klikni na tlačítko níže.</p>
+            <button class="btn btn-warning" @onclick="IncreaseSeason">
                 <i class="bi bi-arrow-up-circle me-2"></i>Nová sezóna +1
             </button>
         </div>
     </div>
 
-    <h5>Přehled zadaných sezón</h5>
-    <div class="table-responsive" style="max-width:560px">
-        <table class="table table-sm">
-            <thead><tr><th>Sezóna</th><th>Počet hráčů se statistikami</th><th></th></tr></thead>
-            <tbody>
-                @foreach (var s in _seasonSummary)
-                {
+    <!-- Seasons overview table -->
+    <div class="ui-panel ui-anim-fade-up">
+        <div class="ui-panel-header">
+            <span class="ui-panel-title">
+                <i class="bi bi-list-ol text-accent"></i>
+                Přehled sezón
+            </span>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
                     <tr>
-                        <td>
-                            @s.Season
-                            @if (s.Season == _account.CurrentSeason)
-                            {
-                                <span class="badge bg-primary ms-1">aktuální</span>
-                            }
-                        </td>
-                        <td>@s.Count</td>
-                        <td>
-                            <button class="btn btn-outline-danger btn-sm"
-                                    @onclick="() => ConfirmDeleteSeason(s.Season)"
-                                    title="Smazat všechny statistiky za sezónu @s.Season">
-                                <i class="bi bi-trash"></i>
-                            </button>
-                        </td>
+                        <th>Sezóna</th>
+                        <th class="text-center">Hráči se statistikami</th>
+                        <th></th>
                     </tr>
-                }
-            </tbody>
-        </table>
+                </thead>
+                <tbody>
+                    @if (!_seasonSummary.Any())
+                    {
+                        <tr><td colspan="3" class="text-muted text-center py-4">Žádné statistiky.</td></tr>
+                    }
+                    @foreach (var s in _seasonSummary)
+                    {
+                        <tr>
+                            <td class="fw-semibold">
+                                @s.Season
+                                @if (s.Season == _account.CurrentSeason)
+                                {
+                                    <span class="badge bg-primary ms-2">aktuální</span>
+                                }
+                            </td>
+                            <td class="text-center text-muted small">@s.Count</td>
+                            <td class="text-end">
+                                <button class="btn btn-outline-danger btn-sm"
+                                        @onclick="() => ConfirmDeleteSeason(s.Season)"
+                                        title="Smazat všechny statistiky za sezónu @s.Season">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
     </div>
 }
 

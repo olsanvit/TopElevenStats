@@ -4,100 +4,168 @@
 @inject IDbContextFactory<AppDbContextGames> DbFactory
 @inject ToastService Toast
 
-<PageTitle>Přidat statistiky</PageTitle>
-<h3><i class="bi bi-plus-circle-fill me-2"></i>Přidat statistiky sezóny</h3>
+<PageTitle>Přidat statistiky — TopElevenStats</PageTitle>
+
+<div class="ui-page-header ui-anim-fade-up">
+    <h3><i class="bi bi-plus-circle-fill"></i> Přidat statistiky sezóny</h3>
+</div>
 
 @if (_loading)
 {
-    <PageLoadingSpinner />
+    <div class="ui-anim-fade-up d-flex align-items-center gap-2 mt-3">
+        <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+        <span class="text-muted">Načítám…</span>
+    </div>
 }
 else if (_account is null)
 {
-    <div class="alert alert-warning">Nejprve vytvoř účet a hráče.</div>
+    <div class="ui-panel ui-anim-fade-up p-3">
+        <div class="d-flex align-items-center gap-2 text-warning">
+            <i class="bi bi-exclamation-triangle-fill"></i>
+            <span>Nejprve vytvoř účet a hráče.</span>
+        </div>
+    </div>
 }
 else
 {
-    <div class="mb-3" style="max-width:400px">
-        <label class="form-label fw-bold">Sezóna @_account.CurrentSeason – Hráč</label>
-        <select class="form-select" value="@_selectedPlayerId" @onchange="OnPlayerChanged">
-            <option value="">— vyber hráče —</option>
-            @foreach (var p in _players)
-            {
-                <option value="@p.Guid">@p.Name (@p.Roles) OVR @p.Ovr</option>
-            }
-        </select>
+    <!-- Player selector -->
+    <div class="ui-panel ui-anim-fade-up">
+        <div class="ui-panel-header">
+            <span class="ui-panel-title">
+                <i class="bi bi-person-circle text-accent"></i>
+                Sezóna @_account.CurrentSeason – Výběr hráče
+            </span>
+        </div>
+        <div class="p-3">
+            <select class="form-select form-select-sm"
+                    style="max-width:420px;background:rgba(255,255,255,0.05);border-color:rgba(255,255,255,0.1);color:var(--ui-text-1)"
+                    value="@_selectedPlayerId" @onchange="OnPlayerChanged">
+                <option value="">— vyber hráče —</option>
+                @foreach (var p in _players)
+                {
+                    <option value="@p.Guid">@p.Name (@p.Roles) OVR @p.Ovr</option>
+                }
+            </select>
+        </div>
     </div>
 
     @if (_selectedPlayer is not null)
     {
-        <div class="card" style="max-width:560px">
-            <div class="card-header fw-bold">
-                @_selectedPlayer.Name – Sezóna @_account.CurrentSeason
-                @if (_selectedPlayer.IsGoalkeeper)
-                {
-                    <span class="badge bg-success ms-2">GK</span>
-                }
-                else if (_selectedPlayer.IsElite)
-                {
-                    <span class="badge bg-warning text-dark ms-2">ELITNÍ</span>
-                }
+        <!-- Stats form -->
+        <div class="ui-panel ui-anim-fade-up">
+            <div class="ui-panel-header">
+                <span class="ui-panel-title">
+                    <i class="bi bi-pencil-square text-accent"></i>
+                    @_selectedPlayer.Name – Sezóna @_account.CurrentSeason
+                    @if (_selectedPlayer.IsGoalkeeper) { <span class="badge bg-success ms-2">GK</span> }
+                    @if (_selectedPlayer.IsElite) { <span class="badge bg-warning text-dark ms-2">ELITNÍ</span> }
+                </span>
             </div>
-            <div class="card-body">
+            <div class="p-3">
                 @if (_existingStats is not null)
                 {
-                    <div class="alert alert-warning py-1">Statistiky pro tuto sezónu již existují – přepíšou se uložením.</div>
+                    <div class="d-flex align-items-center gap-2 text-warning mb-3">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        <span class="small">Statistiky pro tuto sezónu již existují – přepíšou se uložením.</span>
+                    </div>
                 }
 
-                <div class="row g-2 mb-2">
-                    <div class="col-6 col-md-4">
-                        <label>Průměrné hodnocení</label>
-                        <input type="number" step="0.1" class="form-control" @bind="_s.AvgRating" />
+                <div class="row g-3 mb-3">
+                    <div class="col-6 col-md-3">
+                        <label class="form-label small text-muted">Průměrné hodnocení</label>
+                        <input type="number" step="0.1" class="form-control form-control-sm"
+                               style="background:rgba(255,255,255,0.05);border-color:rgba(255,255,255,0.1);color:var(--ui-text-1)"
+                               @bind="_s.AvgRating" />
                     </div>
-                    <div class="col-6 col-md-4">
-                        <label>Odehrané zápasy</label>
-                        <input type="number" class="form-control" @bind="_s.MatchesPlayed" />
+                    <div class="col-6 col-md-3">
+                        <label class="form-label small text-muted">Odehrané zápasy</label>
+                        <input type="number" class="form-control form-control-sm"
+                               style="background:rgba(255,255,255,0.05);border-color:rgba(255,255,255,0.1);color:var(--ui-text-1)"
+                               @bind="_s.MatchesPlayed" />
                     </div>
                     @if (!_selectedPlayer.IsGoalkeeper)
                     {
-                        <div class="col-6 col-md-4">
-                            <label>Góly</label>
-                            <input type="number" class="form-control" @bind="_goalsInput" />
+                        <div class="col-6 col-md-3">
+                            <label class="form-label small text-muted">Góly</label>
+                            <input type="number" class="form-control form-control-sm"
+                                   style="background:rgba(255,255,255,0.05);border-color:rgba(255,255,255,0.1);color:var(--ui-text-1)"
+                                   @bind="_goalsInput" />
                         </div>
-                        <div class="col-6 col-md-4">
-                            <label>xG90</label>
-                            <input type="number" step="0.1" class="form-control" @bind="_xg90Input" />
+                        <div class="col-6 col-md-3">
+                            <label class="form-label small text-muted">xG90</label>
+                            <input type="number" step="0.1" class="form-control form-control-sm"
+                                   style="background:rgba(255,255,255,0.05);border-color:rgba(255,255,255,0.1);color:var(--ui-text-1)"
+                                   @bind="_xg90Input" />
                         </div>
                     }
-                    <div class="col-6 col-md-4">
-                        <label>Asistence</label>
-                        <input type="number" class="form-control" @bind="_s.Assists" />
+                    <div class="col-6 col-md-3">
+                        <label class="form-label small text-muted">Asistence</label>
+                        <input type="number" class="form-control form-control-sm"
+                               style="background:rgba(255,255,255,0.05);border-color:rgba(255,255,255,0.1);color:var(--ui-text-1)"
+                               @bind="_s.Assists" />
                     </div>
-                    <div class="col-6 col-md-4">
-                        <label>Klíčové přihrávky</label>
-                        <input type="number" step="0.1" class="form-control" @bind="_s.KeyPasses" />
+                    <div class="col-6 col-md-3">
+                        <label class="form-label small text-muted">Klíčové přihrávky</label>
+                        <input type="number" step="0.1" class="form-control form-control-sm"
+                               style="background:rgba(255,255,255,0.05);border-color:rgba(255,255,255,0.1);color:var(--ui-text-1)"
+                               @bind="_s.KeyPasses" />
                     </div>
                     @if (_selectedPlayer.IsGoalkeeper)
                     {
-                        <div class="col-6 col-md-4">
-                            <label>Čistá konta</label>
-                            <input type="number" class="form-control" @bind="_cleanSheetsInput" />
+                        <div class="col-6 col-md-3">
+                            <label class="form-label small text-muted">Čistá konta</label>
+                            <input type="number" class="form-control form-control-sm"
+                                   style="background:rgba(255,255,255,0.05);border-color:rgba(255,255,255,0.1);color:var(--ui-text-1)"
+                                   @bind="_cleanSheetsInput" />
                         </div>
                     }
                 </div>
 
-                <div class="row g-2 mb-2">
-                    <div class="col-4"><label>Zranění</label><input type="number" class="form-control" @bind="_s.Injuries" /></div>
-                    <div class="col-4"><label>Žluté karty</label><input type="number" class="form-control" @bind="_s.YellowCards" /></div>
-                    <div class="col-4"><label>Červené karty</label><input type="number" class="form-control" @bind="_s.RedCards" /></div>
+                <div class="row g-3 mb-3">
+                    <div class="col-4 col-md-2">
+                        <label class="form-label small text-muted">Zranění</label>
+                        <input type="number" class="form-control form-control-sm"
+                               style="background:rgba(255,255,255,0.05);border-color:rgba(255,255,255,0.1);color:var(--ui-text-1)"
+                               @bind="_s.Injuries" />
+                    </div>
+                    <div class="col-4 col-md-2">
+                        <label class="form-label small text-muted">Žluté karty</label>
+                        <input type="number" class="form-control form-control-sm"
+                               style="background:rgba(255,255,255,0.05);border-color:rgba(255,255,255,0.1);color:var(--ui-text-1)"
+                               @bind="_s.YellowCards" />
+                    </div>
+                    <div class="col-4 col-md-2">
+                        <label class="form-label small text-muted">Červené karty</label>
+                        <input type="number" class="form-control form-control-sm"
+                               style="background:rgba(255,255,255,0.05);border-color:rgba(255,255,255,0.1);color:var(--ui-text-1)"
+                               @bind="_s.RedCards" />
+                    </div>
                 </div>
 
-                <div class="row g-2 mb-3">
-                    <div class="col-4"><label>S hráčem %</label><input type="number" class="form-control" @bind="_s.WinRatioWith" /></div>
-                    <div class="col-4"><label>Bez hráče %</label><input type="number" class="form-control" @bind="_s.WinRatioWithout" /></div>
-                    <div class="col-4"><label>Týmový průměr %</label><input type="number" class="form-control" @bind="_s.TeamAverage" /></div>
+                <div class="row g-3 mb-4">
+                    <div class="col-4 col-md-3">
+                        <label class="form-label small text-muted">S hráčem %</label>
+                        <input type="number" class="form-control form-control-sm"
+                               style="background:rgba(255,255,255,0.05);border-color:rgba(255,255,255,0.1);color:var(--ui-text-1)"
+                               @bind="_s.WinRatioWith" />
+                    </div>
+                    <div class="col-4 col-md-3">
+                        <label class="form-label small text-muted">Bez hráče %</label>
+                        <input type="number" class="form-control form-control-sm"
+                               style="background:rgba(255,255,255,0.05);border-color:rgba(255,255,255,0.1);color:var(--ui-text-1)"
+                               @bind="_s.WinRatioWithout" />
+                    </div>
+                    <div class="col-4 col-md-3">
+                        <label class="form-label small text-muted">Týmový průměr %</label>
+                        <input type="number" class="form-control form-control-sm"
+                               style="background:rgba(255,255,255,0.05);border-color:rgba(255,255,255,0.1);color:var(--ui-text-1)"
+                               @bind="_s.TeamAverage" />
+                    </div>
                 </div>
 
-                <button class="btn btn-primary" @onclick="Save"><i class="bi bi-floppy me-1"></i>Uložit</button>
+                <button class="btn btn-success btn-sm" @onclick="Save">
+                    <i class="bi bi-floppy me-1"></i>Uložit statistiky
+                </button>
             </div>
         </div>
     }

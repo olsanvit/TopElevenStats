@@ -1,0 +1,209 @@
+@page "/players/{Id:guid}"
+@rendermode InteractiveServer
+@attribute [Authorize]
+
+@using Microsoft.EntityFrameworkCore
+@using SharedServices.Models.TopEleven
+@inject IDbContextFactory<AppDbContextGames> DbFactory
+
+<PageTitle>@(_player?.Name ?? "Hráč") — TopElevenStats</PageTitle>
+
+@if (_loading)
+{
+    <div class="ui-anim-fade-up d-flex align-items-center gap-2 mt-4">
+        <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+        <span class="text-muted">Načítám…</span>
+    </div>
+}
+else if (_player is null)
+{
+    <div class="ui-panel ui-anim-fade-up text-center p-4" style="max-width:480px;margin:60px auto;">
+        <div style="font-size:2.5rem;margin-bottom:.5rem;">🔍</div>
+        <h4>Hráč nenalezen</h4>
+        <p class="text-muted small">Hráč s tímto ID neexistuje.</p>
+        <a href="/players" class="btn btn-primary btn-sm">Zpět na seznam</a>
+    </div>
+}
+else
+{
+    <div class="ui-page-header ui-anim-fade-up">
+        <div class="d-flex align-items-center gap-3">
+            <a href="/players" class="btn btn-outline-secondary btn-sm">
+                <i class="bi bi-arrow-left"></i>
+            </a>
+            <h3 class="m-0">
+                <i class="bi bi-person-fill me-2 text-accent"></i>@_player.Name
+                @if (_player.IsElite)
+                {
+                    <i class="bi bi-star-fill text-warning ms-1 fs-5"></i>
+                }
+            </h3>
+        </div>
+        <div class="d-flex gap-2">
+            <span class="badge bg-secondary">OVR @_player.Ovr</span>
+            <span class="badge bg-secondary">@_stats.Count sezón</span>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <!-- Player info card -->
+        <div class="col-lg-4">
+            <div class="ui-panel ui-anim-fade-up h-100">
+                <div class="ui-panel-header">
+                    <span class="ui-panel-title">
+                        <i class="bi bi-person-circle text-accent"></i>
+                        Profil hráče
+                    </span>
+                </div>
+                <div class="p-3">
+                    <dl class="row mb-0 small">
+                        <dt class="col-5 text-muted">Jméno</dt>
+                        <dd class="col-7 fw-semibold">@_player.Name</dd>
+
+                        <dt class="col-5 text-muted">OVR</dt>
+                        <dd class="col-7"><span class="badge bg-secondary">@_player.Ovr</span></dd>
+
+                        <dt class="col-5 text-muted">Věk</dt>
+                        <dd class="col-7">@_player.Age</dd>
+
+                        <dt class="col-5 text-muted">Role</dt>
+                        <dd class="col-7">
+                            <span class="badge @(_player.IsGoalkeeper ? "bg-success" : "bg-secondary")">@_player.Roles</span>
+                        </dd>
+
+                        @if (!string.IsNullOrEmpty(_player.SpecialAbility))
+                        {
+                            <dt class="col-5 text-muted">Spec.</dt>
+                            <dd class="col-7">@_player.SpecialAbility</dd>
+                        }
+
+                        <dt class="col-5 text-muted">Elitní</dt>
+                        <dd class="col-7">
+                            @if (_player.IsElite)
+                            { <i class="bi bi-star-fill text-warning"></i> }
+                            else
+                            { <span class="text-muted">—</span> }
+                        </dd>
+
+                        <dt class="col-5 text-muted">Brankář</dt>
+                        <dd class="col-7">@(_player.IsGoalkeeper ? "Ano" : "Ne")</dd>
+
+                        @if (!string.IsNullOrEmpty(_player.Citizenship))
+                        {
+                            <dt class="col-5 text-muted">Občanství</dt>
+                            <dd class="col-7">@_player.Citizenship</dd>
+                        }
+                    </dl>
+
+                    @if (_stats.Count > 0)
+                    {
+                        <hr class="border-opacity-10" />
+                        <div class="small text-muted mb-2 fw-semibold">Kariérní průměry</div>
+                        <dl class="row mb-0 small">
+                            <dt class="col-5 text-muted">Průměr. hod.</dt>
+                            <dd class="col-7 fw-semibold text-accent">@(_stats.Average(s => s.AvgRating).ToString("F2"))</dd>
+
+                            <dt class="col-5 text-muted">Celkem zápasů</dt>
+                            <dd class="col-7">@_stats.Sum(s => s.MatchesPlayed)</dd>
+
+                            <dt class="col-5 text-muted">Celkem gólů</dt>
+                            <dd class="col-7">@_stats.Sum(s => s.Goals ?? 0)</dd>
+
+                            <dt class="col-5 text-muted">Celkem asistencí</dt>
+                            <dd class="col-7">@_stats.Sum(s => s.Assists)</dd>
+
+                            <dt class="col-5 text-muted">Ž. karty</dt>
+                            <dd class="col-7">@_stats.Sum(s => s.YellowCards)</dd>
+                        </dl>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Season stats -->
+        <div class="col-lg-8">
+            <div class="ui-panel ui-anim-fade-up h-100">
+                <div class="ui-panel-header">
+                    <span class="ui-panel-title">
+                        <i class="bi bi-calendar3 text-accent"></i>
+                        Sezónní statistiky
+                    </span>
+                    <span class="badge bg-secondary">@_stats.Count sezón</span>
+                </div>
+                @if (!_stats.Any())
+                {
+                    <div class="p-3 text-muted small">Žádné sezónní statistiky.</div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover table-sm align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Sezóna</th>
+                                    <th class="text-center">Hod.</th>
+                                    <th class="text-center">Zápasy</th>
+                                    <th class="text-center">Góly</th>
+                                    <th class="text-center">Asist.</th>
+                                    @if (_player.IsGoalkeeper)
+                                    {
+                                        <th class="text-center">Č. konta</th>
+                                    }
+                                    <th class="text-center">Win%</th>
+                                    <th class="text-center">Ž/Č</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var s in _stats.OrderByDescending(s => s.Season))
+                                {
+                                    <tr>
+                                        <td class="fw-semibold">S@(s.Season)</td>
+                                        <td class="text-center">
+                                            <span class="badge @(s.AvgRating >= 7 ? "bg-success" : s.AvgRating >= 6 ? "bg-warning text-dark" : "bg-danger")">
+                                                @s.AvgRating.ToString("F1")
+                                            </span>
+                                        </td>
+                                        <td class="text-center text-muted small">@s.MatchesPlayed</td>
+                                        <td class="text-center text-muted small">@(s.Goals?.ToString() ?? "—")</td>
+                                        <td class="text-center text-muted small">@s.Assists</td>
+                                        @if (_player.IsGoalkeeper)
+                                        {
+                                            <td class="text-center text-muted small">@(s.CleanSheets?.ToString() ?? "—")</td>
+                                        }
+                                        <td class="text-center text-muted small">@s.WinRatioWith%</td>
+                                        <td class="text-center text-muted small">@s.YellowCards/@s.RedCards</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private bool _loading = true;
+    private TopElevenPlayer? _player;
+    private List<TopElevenSeasonStats> _stats = new();
+
+    protected override async Task OnParametersSetAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _player = await db.TopElevenPlayers.FindAsync(Id);
+        if (_player is not null)
+        {
+            _stats = await db.TopElevenSeasonStats
+                .Where(s => s.PlayerId == Id)
+                .OrderByDescending(s => s.Season)
+                .ToListAsync();
+        }
+        _loading = false;
+    }
+}

@@ -1,0 +1,244 @@
+@page "/season/report"
+@rendermode InteractiveServer
+@attribute [Authorize]
+
+@using Microsoft.EntityFrameworkCore
+@using SharedServices.Models.TopEleven
+@inject IDbContextFactory<AppDbContextGames> DbFactory
+@inject IJSRuntime JS
+
+<PageTitle>Sezónní report — TopElevenStats</PageTitle>
+
+<div class="ui-page-header ui-anim-fade-up">
+    <div class="d-flex align-items-center gap-3">
+        <a href="/season" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left"></i>
+        </a>
+        <h3 class="m-0"><i class="bi bi-file-earmark-bar-graph me-2 text-accent"></i>Sezónní report</h3>
+    </div>
+    <div class="d-flex gap-2">
+        @if (_seasons.Count > 0)
+        {
+            <button class="btn btn-sm btn-outline-success" @onclick="ExportCsvAsync">
+                <i class="bi bi-download me-1"></i>Export CSV
+            </button>
+        }
+    </div>
+</div>
+
+@if (_loading)
+{
+    <div class="ui-anim-fade-up d-flex align-items-center gap-2 mt-3">
+        <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+        <span class="text-muted">Načítám report…</span>
+    </div>
+}
+else
+{
+    <!-- Season picker -->
+    <div class="ui-panel ui-anim-fade-up">
+        <div class="ui-panel-header">
+            <span class="ui-panel-title">
+                <i class="bi bi-filter text-accent"></i>
+                Filtr sezóny
+            </span>
+        </div>
+        <div class="p-3 d-flex gap-3 align-items-center flex-wrap">
+            <select class="form-select form-select-sm"
+                    style="max-width:140px;background:rgba(255,255,255,0.05);border-color:rgba(255,255,255,0.1);color:var(--ui-text-1)"
+                    @bind="_selectedSeason" @bind:after="OnSeasonChanged">
+                <option value="0">Všechny sezóny</option>
+                @foreach (var s in _seasons)
+                {
+                    <option value="@s">Sezóna @s</option>
+                }
+            </select>
+            <span class="text-muted small">@_reportRows.Count hráčů v reportu</span>
+        </div>
+    </div>
+
+    @if (_reportRows.Count > 0)
+    {
+        <!-- Summary stats -->
+        <div class="row g-3 mb-3 ui-anim-fade-up">
+            <div class="col-6 col-lg-3">
+                <div class="ui-panel text-center p-3">
+                    <div class="fw-bold fs-4 text-accent">@(_reportRows.Average(r => r.AvgRating).ToString("F2"))</div>
+                    <div class="text-muted small">Prům. hodnocení</div>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="ui-panel text-center p-3">
+                    <div class="fw-bold fs-4 text-accent">@_reportRows.Sum(r => r.Goals)</div>
+                    <div class="text-muted small">Celkem gólů</div>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="ui-panel text-center p-3">
+                    <div class="fw-bold fs-4 text-accent">@_reportRows.Sum(r => r.Assists)</div>
+                    <div class="text-muted small">Celkem asistencí</div>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="ui-panel text-center p-3">
+                    <div class="fw-bold fs-4 text-accent">@(_reportRows.Count > 0 ? _reportRows.Max(r => r.AvgRating).ToString("F2") : "—")</div>
+                    <div class="text-muted small">Nejlepší hodnocení</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Report table -->
+        <div class="ui-panel ui-anim-fade-up">
+            <div class="ui-panel-header">
+                <span class="ui-panel-title">
+                    <i class="bi bi-table text-accent"></i>
+                    Přehled výkonů
+                </span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover table-sm align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Hráč</th>
+                            <th class="text-center">OVR</th>
+                            <th class="text-center">Hod.</th>
+                            <th class="text-center">Zápasy</th>
+                            <th class="text-center">Góly</th>
+                            <th class="text-center">Asist.</th>
+                            <th class="text-center">Win%</th>
+                            <th class="text-center">Ž/Č</th>
+                            <th>Role</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @{int rank = 1;}
+                        @foreach (var r in _reportRows.OrderByDescending(r => r.AvgRating))
+                        {
+                            <tr>
+                                <td class="text-muted small">@rank++</td>
+                                <td>
+                                    <a href="/players/@r.PlayerGuid" class="fw-semibold text-decoration-none">
+                                        @r.PlayerName
+                                    </a>
+                                    @if (r.IsElite)
+                                    { <i class="bi bi-star-fill text-warning ms-1 small"></i> }
+                                </td>
+                                <td class="text-center"><span class="badge bg-secondary small">@r.Ovr</span></td>
+                                <td class="text-center">
+                                    <span class="badge @(r.AvgRating >= 7 ? "bg-success" : r.AvgRating >= 6 ? "bg-warning text-dark" : "bg-danger")">
+                                        @r.AvgRating.ToString("F2")
+                                    </span>
+                                </td>
+                                <td class="text-center text-muted small">@r.MatchesPlayed</td>
+                                <td class="text-center text-muted small">@r.Goals</td>
+                                <td class="text-center text-muted small">@r.Assists</td>
+                                <td class="text-center text-muted small">@r.WinRatioWith%</td>
+                                <td class="text-center text-muted small">@r.YellowCards/@r.RedCards</td>
+                                <td class="text-muted small">
+                                    <span class="badge @(r.IsGoalkeeper ? "bg-success" : "bg-secondary") small">@r.Roles</span>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+    else if (_seasons.Count == 0)
+    {
+        <div class="ui-panel text-center p-4 ui-anim-fade-up">
+            <div class="text-muted small">Žádná sezónní data nenalezena. Přidejte statistiky přes <a href="/stats/add">Přidat statistiky</a>.</div>
+        </div>
+    }
+}
+
+@code {
+    private bool _loading = true;
+    private List<int> _seasons = new();
+    private int _selectedSeason;
+    private List<ReportRow> _reportRows = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _seasons = await db.TopElevenSeasonStats
+            .Select(s => s.Season)
+            .Distinct()
+            .OrderByDescending(s => s)
+            .ToListAsync();
+        _selectedSeason = _seasons.FirstOrDefault();
+        await LoadReportAsync();
+    }
+
+    private async Task OnSeasonChanged() => await LoadReportAsync();
+
+    private async Task LoadReportAsync()
+    {
+        _loading = true;
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        var query = db.TopElevenSeasonStats
+            .Include(s => s.Player)
+            .AsQueryable();
+
+        if (_selectedSeason > 0)
+            query = query.Where(s => s.Season == _selectedSeason);
+
+        var stats = await query.ToListAsync();
+
+        // Group by player and aggregate
+        _reportRows = stats
+            .GroupBy(s => s.PlayerId)
+            .Select(g =>
+            {
+                var player = g.First().Player;
+                return new ReportRow
+                {
+                    PlayerGuid   = player.Guid,
+                    PlayerName   = player.Name,
+                    Ovr          = player.Ovr,
+                    Roles        = player.Roles,
+                    IsGoalkeeper = player.IsGoalkeeper,
+                    IsElite      = player.IsElite,
+                    AvgRating    = g.Count() > 0 ? g.Average(s => s.AvgRating) : 0,
+                    MatchesPlayed= g.Sum(s => s.MatchesPlayed),
+                    Goals        = g.Sum(s => s.Goals ?? 0),
+                    Assists      = g.Sum(s => s.Assists),
+                    WinRatioWith = g.Count() > 0 ? (int)g.Average(s => s.WinRatioWith) : 0,
+                    YellowCards  = g.Sum(s => s.YellowCards),
+                    RedCards     = g.Sum(s => s.RedCards),
+                };
+            })
+            .ToList();
+
+        _loading = false;
+    }
+
+    private async Task ExportCsvAsync()
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("Hráč,OVR,Role,Hod.,Zápasy,Góly,Asistence,Win%,ŽK,ČK");
+        foreach (var r in _reportRows.OrderByDescending(r => r.AvgRating))
+            sb.AppendLine($"\"{r.PlayerName?.Replace("\"", "\"\"")}\",{r.Ovr},{r.Roles},{r.AvgRating:F2},{r.MatchesPlayed},{r.Goals},{r.Assists},{r.WinRatioWith},{r.YellowCards},{r.RedCards}");
+        var bytes = System.Text.Encoding.UTF8.GetBytes(sb.ToString());
+        await JS.InvokeVoidAsync("downloadBase64File", "season_report.csv", "text/csv", Convert.ToBase64String(bytes));
+    }
+
+    private class ReportRow
+    {
+        public Guid PlayerGuid   { get; set; }
+        public string PlayerName { get; set; } = "";
+        public int Ovr           { get; set; }
+        public string Roles      { get; set; } = "";
+        public bool IsGoalkeeper { get; set; }
+        public bool IsElite      { get; set; }
+        public decimal AvgRating { get; set; }
+        public int MatchesPlayed { get; set; }
+        public int Goals         { get; set; }
+        public int Assists       { get; set; }
+        public int WinRatioWith  { get; set; }
+        public int YellowCards   { get; set; }
+        public int RedCards      { get; set; }
+    }
+}

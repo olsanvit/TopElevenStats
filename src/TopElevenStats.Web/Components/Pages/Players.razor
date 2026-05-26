@@ -154,7 +154,9 @@ else
                         @foreach (var p in _players)
                         {
                             <tr>
-                                <td class="fw-semibold">@p.Name</td>
+                                <td class="fw-semibold">
+                                    <a href="/players/@p.Guid" class="text-decoration-none">@p.Name</a>
+                                </td>
                                 <td class="text-center"><span class="badge bg-secondary">@p.Ovr</span></td>
                                 <td class="text-center text-muted small">@p.Age</td>
                                 <td>

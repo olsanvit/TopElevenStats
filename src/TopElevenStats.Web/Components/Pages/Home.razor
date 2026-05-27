@@ -130,7 +130,7 @@ else
                         @foreach (var s in _gkStats)
                         {
                             <tr>
-                                <td class="fw-semibold">@s.Player.Name</td>
+                                <td class="fw-semibold"><a href="/players/@s.Player.Guid" class="text-decoration-none">@s.Player.Name</a></td>
                                 <td>@s.Player.Ovr</td>
                                 <td>@s.Player.Age</td>
                                 <td>@s.AvgRating.ToString("F1")</td>

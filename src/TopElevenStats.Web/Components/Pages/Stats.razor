@@ -45,7 +45,7 @@ else
     {
         <!-- Player header badges -->
         <div class="d-flex align-items-center gap-2 mb-3 ui-anim-fade-up">
-            <span class="fw-semibold fs-5">@_selectedPlayer.Name</span>
+            <a href="/players/@_selectedPlayer.Guid" class="text-decoration-none fw-semibold fs-5">@_selectedPlayer.Name</a>
             <span class="badge bg-secondary">OVR @_selectedPlayer.Ovr</span>
             @if (_selectedPlayer.IsGoalkeeper) { <span class="badge bg-success">GK</span> }
             @if (_selectedPlayer.IsElite) { <span class="badge bg-warning text-dark">ELITNÍ</span> }

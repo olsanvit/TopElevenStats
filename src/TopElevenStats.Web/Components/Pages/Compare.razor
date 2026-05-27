@@ -86,8 +86,12 @@ else
                         Srovnání po sezónách
                     </span>
                     <div class="d-flex gap-2">
-                        <span class="badge" style="background:rgba(99,102,241,0.2);color:#a5b4fc">@_leftPlayer.Name</span>
-                        <span class="badge" style="background:rgba(239,68,68,0.2);color:#fca5a5">@_rightPlayer.Name</span>
+                        <a href="/players/@_leftPlayer.Guid" class="text-decoration-none">
+                            <span class="badge" style="background:rgba(99,102,241,0.2);color:#a5b4fc">@_leftPlayer.Name</span>
+                        </a>
+                        <a href="/players/@_rightPlayer.Guid" class="text-decoration-none">
+                            <span class="badge" style="background:rgba(239,68,68,0.2);color:#fca5a5">@_rightPlayer.Name</span>
+                        </a>
                     </div>
                 </div>
                 <div class="table-responsive">
@@ -110,16 +114,16 @@ else
                             </tr>
                             <tr>
                                 <th></th>
-                                <th style="color:#a5b4fc">@_leftPlayer.Name</th>
-                                <th style="color:#fca5a5">@_rightPlayer.Name</th>
-                                <th style="color:#a5b4fc">@_leftPlayer.Name</th>
-                                <th style="color:#fca5a5">@_rightPlayer.Name</th>
-                                <th style="color:#a5b4fc">@_leftPlayer.Name</th>
-                                <th style="color:#fca5a5">@_rightPlayer.Name</th>
-                                <th style="color:#a5b4fc">@_leftPlayer.Name</th>
-                                <th style="color:#fca5a5">@_rightPlayer.Name</th>
-                                <th style="color:#a5b4fc">@_leftPlayer.Name</th>
-                                <th style="color:#fca5a5">@_rightPlayer.Name</th>
+                                <th style="color:#a5b4fc"><a href="/players/@_leftPlayer.Guid" class="text-decoration-none" style="color:inherit">@_leftPlayer.Name</a></th>
+                                <th style="color:#fca5a5"><a href="/players/@_rightPlayer.Guid" class="text-decoration-none" style="color:inherit">@_rightPlayer.Name</a></th>
+                                <th style="color:#a5b4fc"><a href="/players/@_leftPlayer.Guid" class="text-decoration-none" style="color:inherit">@_leftPlayer.Name</a></th>
+                                <th style="color:#fca5a5"><a href="/players/@_rightPlayer.Guid" class="text-decoration-none" style="color:inherit">@_rightPlayer.Name</a></th>
+                                <th style="color:#a5b4fc"><a href="/players/@_leftPlayer.Guid" class="text-decoration-none" style="color:inherit">@_leftPlayer.Name</a></th>
+                                <th style="color:#fca5a5"><a href="/players/@_rightPlayer.Guid" class="text-decoration-none" style="color:inherit">@_rightPlayer.Name</a></th>
+                                <th style="color:#a5b4fc"><a href="/players/@_leftPlayer.Guid" class="text-decoration-none" style="color:inherit">@_leftPlayer.Name</a></th>
+                                <th style="color:#fca5a5"><a href="/players/@_rightPlayer.Guid" class="text-decoration-none" style="color:inherit">@_rightPlayer.Name</a></th>
+                                <th style="color:#a5b4fc"><a href="/players/@_leftPlayer.Guid" class="text-decoration-none" style="color:inherit">@_leftPlayer.Name</a></th>
+                                <th style="color:#fca5a5"><a href="/players/@_rightPlayer.Guid" class="text-decoration-none" style="color:inherit">@_rightPlayer.Name</a></th>
                             </tr>
                         </thead>
                         <tbody>

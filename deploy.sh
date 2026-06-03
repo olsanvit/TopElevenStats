@@ -1,3 +1,3 @@
-#!/bin/sh
-# Spustit na QNAP: sh deploy.sh
-deploy topelevenst
+#!/bin/bash
+# Deploy na QNAP — build lokalne, copy + restart na QNAP
+~/deploy-to-qnap.sh testats ${1:-prod}

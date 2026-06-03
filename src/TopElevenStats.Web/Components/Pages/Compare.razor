@@ -60,13 +60,11 @@ else
 
     @if (_leftPlayer is not null && _rightPlayer is not null)
     {
-        @{
-            var commonSeasons = _leftStats
-                .Select(s => s.Season)
-                .Intersect(_rightStats.Select(s => s.Season))
-                .OrderBy(s => s)
-                .ToList();
-        }
+        var commonSeasons = _leftStats
+            .Select(s => s.Season)
+            .Intersect(_rightStats.Select(s => s.Season))
+            .OrderBy(s => s)
+            .ToList();
 
         @if (commonSeasons.Count == 0)
         {

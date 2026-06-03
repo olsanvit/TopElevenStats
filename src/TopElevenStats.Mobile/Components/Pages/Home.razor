@@ -1,0 +1,116 @@
+@page "/"
+@using Microsoft.EntityFrameworkCore
+@using SharedServices
+@using SharedServices.Models.TopEleven
+@inject IDbContextFactory<AppDbContextGames> DbFactory
+
+<PageTitle>TopElevenStats</PageTitle>
+
+<div class="ui-panel ui-anim-fade-up text-center p-4 mb-3">
+    <div style="font-size:2.5rem;margin-bottom:.5rem;">⚽</div>
+    <h4 class="fw-bold mb-1">TopElevenStats</h4>
+    <p class="text-muted small mb-0">TopEleven fotbalová manažerská hra — sledování hráčů a statistik.</p>
+</div>
+
+@if (_loading)
+{
+    <div class="text-center py-4">
+        <div class="spinner-border spinner-border-sm text-warning" role="status"></div>
+        <span class="ms-2 small text-muted">Načítání...</span>
+    </div>
+}
+else
+{
+    <div class="row g-2 mb-3">
+        <div class="col-4">
+            <div class="ui-panel p-3 text-center">
+                <div class="fw-bold fs-4 text-warning">@_playerCount</div>
+                <div class="text-muted small">Hráči</div>
+            </div>
+        </div>
+        <div class="col-4">
+            <div class="ui-panel p-3 text-center">
+                <div class="fw-bold fs-4 text-warning">@_eliteCount</div>
+                <div class="text-muted small">Elitní</div>
+            </div>
+        </div>
+        <div class="col-4">
+            <div class="ui-panel p-3 text-center">
+                <div class="fw-bold fs-4 text-warning">@(_playerCount > 0 ? _avgOvr.ToString("F0") : "–")</div>
+                <div class="text-muted small">Prům. OVR</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="ui-panel ui-anim-fade-up p-3 mb-3">
+        <div class="fw-semibold mb-2">Top 5 hráčů (OVR)</div>
+        @if (_topPlayers.Count == 0)
+        {
+            <p class="text-muted small mb-0">Žádní hráči zatím nejsou evidováni.</p>
+        }
+        else
+        {
+            @foreach (var p in _topPlayers)
+            {
+                <div class="d-flex align-items-center justify-content-between py-1 border-bottom">
+                    <div>
+                        <span class="fw-semibold small">@p.Name</span>
+                        @if (p.IsElite)
+                        {
+                            <span class="badge bg-warning text-dark ms-1" style="font-size:.65rem">Elite</span>
+                        }
+                        <div class="text-muted" style="font-size:.72rem">@p.Roles • věk @p.Age</div>
+                    </div>
+                    <span class="badge bg-warning text-dark fw-bold">@p.Ovr OVR</span>
+                </div>
+            }
+        }
+    </div>
+
+    <div class="ui-panel ui-anim-fade-up p-3">
+        <div class="d-flex align-items-center gap-3 py-1 border-bottom">
+            <i class="bi bi-people text-warning fs-5"></i>
+            <div>
+                <div class="fw-semibold small">Hráči</div>
+                <div class="text-muted" style="font-size:.75rem">Přehled a správa hráčů</div>
+            </div>
+        </div>
+        <div class="d-flex align-items-center gap-3 py-1 border-bottom">
+            <i class="bi bi-graph-up text-warning fs-5"></i>
+            <div>
+                <div class="fw-semibold small">Statistiky</div>
+                <div class="text-muted" style="font-size:.75rem">Sezónní statistiky a hodnocení</div>
+            </div>
+        </div>
+        <div class="d-flex align-items-center gap-3 py-1">
+            <i class="bi bi-bar-chart-line text-warning fs-5"></i>
+            <div>
+                <div class="fw-semibold small">OVR distribuce</div>
+                <div class="text-muted" style="font-size:.75rem">Rozložení hodnocení celého kádru</div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private int _playerCount;
+    private int _eliteCount;
+    private double _avgOvr;
+    private List<TopElevenPlayer> _topPlayers = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _playerCount = await db.TopElevenPlayers.CountAsync();
+        _eliteCount = await db.TopElevenPlayers.CountAsync(p => p.IsElite);
+        _avgOvr = _playerCount > 0
+            ? await db.TopElevenPlayers.AverageAsync(p => (double)p.Ovr)
+            : 0;
+        _topPlayers = await db.TopElevenPlayers
+            .OrderByDescending(p => p.Ovr)
+            .Take(5)
+            .ToListAsync();
+        _loading = false;
+    }
+}

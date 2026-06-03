@@ -1,0 +1,141 @@
+@page "/players"
+@using Microsoft.EntityFrameworkCore
+@using SharedServices
+@using SharedServices.Models.TopEleven
+@inject IDbContextFactory<AppDbContextGames> DbFactory
+
+<PageTitle>Hráči — TopElevenStats</PageTitle>
+
+<div class="d-flex align-items-center gap-2 mb-3">
+    <i class="bi bi-people-fill text-warning fs-5"></i>
+    <h5 class="mb-0 fw-bold">Hráči</h5>
+    <span class="ms-auto badge bg-warning text-dark">@_total hráčů</span>
+</div>
+
+<div class="input-group input-group-sm mb-3">
+    <span class="input-group-text"><i class="bi bi-search"></i></span>
+    <input type="text" class="form-control" placeholder="Hledat hráče..." @bind="_search" @bind:event="oninput" @oninput="OnSearchChanged" />
+</div>
+
+<div class="d-flex gap-2 mb-3 flex-wrap">
+    <button class="btn btn-sm @(_filterElite ? "btn-warning" : "btn-outline-warning")" @onclick="ToggleElite">
+        <i class="bi bi-star-fill"></i> Pouze elitní
+    </button>
+    <button class="btn btn-sm @(_filterGk ? "btn-warning" : "btn-outline-warning")" @onclick="ToggleGk">
+        <i class="bi bi-shield"></i> Brankáři
+    </button>
+</div>
+
+@if (_loading)
+{
+    <div class="text-center py-4">
+        <div class="spinner-border spinner-border-sm text-warning" role="status"></div>
+        <span class="ms-2 small text-muted">Načítání...</span>
+    </div>
+}
+else if (_players.Count == 0)
+{
+    <div class="ui-panel p-4 text-center text-muted">
+        <i class="bi bi-inbox fs-3 d-block mb-2"></i>
+        Žádní hráči nebyli nalezeni.
+    </div>
+}
+else
+{
+    <div class="ui-panel p-0">
+        @foreach (var p in _players)
+        {
+            <div class="d-flex align-items-center gap-3 px-3 py-2 border-bottom">
+                <div class="flex-grow-1">
+                    <div class="d-flex align-items-center gap-1">
+                        <span class="fw-semibold small">@p.Name</span>
+                        @if (p.IsElite)
+                        {
+                            <span class="badge bg-warning text-dark" style="font-size:.6rem">Elite</span>
+                        }
+                        @if (p.IsGoalkeeper)
+                        {
+                            <span class="badge bg-secondary" style="font-size:.6rem">GK</span>
+                        }
+                    </div>
+                    <div class="text-muted" style="font-size:.72rem">
+                        @p.Roles • věk @p.Age
+                        @if (!string.IsNullOrEmpty(p.Citizenship))
+                        {
+                            <span>&bull; @p.Citizenship</span>
+                        }
+                    </div>
+                </div>
+                <span class="badge bg-warning text-dark fw-bold">@p.Ovr</span>
+            </div>
+        }
+    </div>
+
+    @if (_totalPages > 1)
+    {
+        <div class="d-flex justify-content-center gap-2 mt-3">
+            <button class="btn btn-sm btn-outline-warning" disabled="@(_page == 1)" @onclick="PrevPage">
+                <i class="bi bi-chevron-left"></i>
+            </button>
+            <span class="small align-self-center text-muted">@_page / @_totalPages</span>
+            <button class="btn btn-sm btn-outline-warning" disabled="@(_page == _totalPages)" @onclick="NextPage">
+                <i class="bi bi-chevron-right"></i>
+            </button>
+        </div>
+    }
+}
+
+@code {
+    private bool _loading = true;
+    private List<TopElevenPlayer> _players = new();
+    private string _search = "";
+    private bool _filterElite;
+    private bool _filterGk;
+    private int _page = 1;
+    private const int PageSize = 20;
+    private int _total;
+    private int _totalPages;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task OnSearchChanged(ChangeEventArgs e)
+    {
+        _search = e.Value?.ToString() ?? "";
+        _page = 1;
+        await LoadAsync();
+    }
+
+    private async Task ToggleElite() { _filterElite = !_filterElite; _page = 1; await LoadAsync(); }
+    private async Task ToggleGk() { _filterGk = !_filterGk; _page = 1; await LoadAsync(); }
+    private async Task PrevPage() { if (_page > 1) { _page--; await LoadAsync(); } }
+    private async Task NextPage() { if (_page < _totalPages) { _page++; await LoadAsync(); } }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var query = db.TopElevenPlayers.AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(_search))
+            query = query.Where(p => p.Name.ToLower().Contains(_search.ToLower()));
+        if (_filterElite)
+            query = query.Where(p => p.IsElite);
+        if (_filterGk)
+            query = query.Where(p => p.IsGoalkeeper);
+
+        _total = await query.CountAsync();
+        _totalPages = (int)Math.Ceiling(_total / (double)PageSize);
+        if (_page > _totalPages && _totalPages > 0) _page = _totalPages;
+
+        _players = await query
+            .OrderByDescending(p => p.Ovr)
+            .ThenBy(p => p.Name)
+            .Skip((_page - 1) * PageSize)
+            .Take(PageSize)
+            .ToListAsync();
+
+        _loading = false;
+    }
+}

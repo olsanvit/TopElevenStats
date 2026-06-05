@@ -48,6 +48,10 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <NoWarn>$(NoWarn);NU1900;NU1301</NoWarn>
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);NU1900;NU1301</WarningsNotAsErrors>
+    <NuGetAudit>false</NuGetAudit>
     <RootNamespace>BlazorTopEleven</RootNamespace>
     <UserSecretsId>top-eleven-stats-dev</UserSecretsId>
   </PropertyGroup>

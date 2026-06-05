@@ -101,6 +101,7 @@ builder.Services.AddScoped<AchievementService>(sp =>
         Definitions = TopElevenAchievements.All
     });
 builder.Services.AddScoped<AlertService>();
+builder.Services.AddScoped<LoadingService>();
 builder.Services.AddBlazoredModal();
 builder.Services.AddBlazoredLocalStorage();
 builder.Services.AddBlazoredSessionStorage();

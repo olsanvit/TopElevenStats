@@ -1,6 +1,6 @@
 @page "/import-players"
 @rendermode InteractiveServer
-@attribute [Authorize]
+@attribute [Authorize(Roles = "Admin")]
 @inject IDbContextFactory<AppDbContextGames> DbFactory
 @inject ToastService Toast
 @inject IJSRuntime JS

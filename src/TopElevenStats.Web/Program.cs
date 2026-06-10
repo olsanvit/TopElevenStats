@@ -78,7 +78,8 @@ dsb.EnableDynamicJson();
 var dataSource = dsb.Build();
 
 // AddMabDbContext = AddDbContextFactory + scoped AddDbContext (Identity potřebuje scoped)
-builder.Services.AddMabDbContext<AppDbContextGames>(dataSource);
+builder.Services.AddMabDbContext<AppDbContextGames>(dataSource, configure: opt =>
+    opt.ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning)));
 
 // Identity + Google OAuth
 builder.Services.AddMabAuth<AppDbContextGames>(builder.Configuration);
@@ -89,6 +90,7 @@ builder.Services.AddSingleton<Microsoft.AspNetCore.Identity.UI.Services.IEmailSe
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddCors();
+builder.Services.AddSharedUI(builder.Configuration);
 builder.Services.AddMudServices();
 builder.Services.AddRadzenComponents();
 builder.Services.AddScoped<UiLibraryService>();
@@ -254,6 +256,9 @@ try
     }
 }
 catch (Exception ex) { Log.Warning(ex, "DB migration/seed skipped — DB not available"); }
+
+// Seed role a admin účet
+await AdminUserSeeder.SeedAsync(app.Services, app.Configuration);
 
 app.Lifetime.ApplicationStopping.Register(() =>
     Log.Warning("Application stopping — flushing logs..."));

@@ -110,6 +110,7 @@ builder.Services.AddBlazoredSessionStorage();
 builder.Services.AddApexCharts();
 builder.Services.AddScoped<ErrorService<AppDbContextGames>>();
 builder.Services.AddScoped<EfCoreService<AppDbContextGames>>();
+builder.Services.AddGlobalErrorLogging<AppDbContextGames>();
 builder.Services.AddSingleton<SharedServices.Services.ThemeService>(_ => new SharedServices.Services.ThemeService(builder.Configuration));
 builder.Services.AddDistributedMemoryCache();
 builder.Services.AddSession(options =>

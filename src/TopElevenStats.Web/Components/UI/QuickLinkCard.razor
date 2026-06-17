@@ -1,0 +1,21 @@
+@* Quick navigation card for dashboard home page *@
+<a href="@Href" class="text-decoration-none">
+    <div class="ui-panel p-3 d-flex align-items-center gap-3 quick-link-card">
+        <div class="quick-link-icon @IconClass">
+            <i class="bi @Icon fs-4"></i>
+        </div>
+        <div>
+            <div class="fw-semibold text-body">@Title</div>
+            <div class="text-muted small">@Description</div>
+        </div>
+        <i class="bi bi-chevron-right ms-auto text-muted"></i>
+    </div>
+</a>
+
+@code {
+    [Parameter, EditorRequired] public string Href { get; set; } = "/";
+    [Parameter, EditorRequired] public string Icon { get; set; } = "bi-link";
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public string Description { get; set; } = "";
+    [Parameter] public string IconClass { get; set; } = "";
+}

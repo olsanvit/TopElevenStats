@@ -4,6 +4,7 @@ using FluentValidation;
 using SharedServices.Models.TopEleven;
 using MercenariesAndBeasts.Infrastructure;
 using MercenariesAndBeasts.Infrastructure.Auth;
+using MercenariesAndBeasts.Infrastructure.Localization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Components.Server;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -91,6 +92,7 @@ builder.Services.AddSingleton<Microsoft.AspNetCore.Identity.UI.Services.IEmailSe
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddCors();
 builder.Services.AddSharedUI(builder.Configuration);
+builder.Services.AddSimpleLocalization();
 builder.Services.AddMudServices();
 builder.Services.AddRadzenComponents();
 builder.Services.AddScoped<UiLibraryService>();
@@ -162,6 +164,7 @@ if (!app.Environment.IsProduction())
 app.MapStaticAssets();
 app.UseStaticFiles();
 app.UseCors(b => b.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
+app.UseRequestLocalization();
 app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
@@ -169,6 +172,7 @@ app.UseSession();
 app.UseAntiforgery();
 
 app.MapRazorPages();
+app.MapMabCultureEndpoint();
 app.MapHealthChecks("/health");
 
 app.MapRazorComponents<App>()

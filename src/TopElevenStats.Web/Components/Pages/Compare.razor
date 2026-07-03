@@ -1,6 +1,7 @@
 @page "/compare"
 @rendermode InteractiveServer
 @using Microsoft.EntityFrameworkCore
+@using ApexCharts
 @inject IDbContextFactory<AppDbContextGames> DbFactory
 @inject ToastService Toast
 
@@ -59,6 +60,84 @@ else
 
     @if (_leftPlayer is not null && _rightPlayer is not null)
     {
+        @* ── Career summary ──────────────────────────────────── *@
+        @if (_leftStats.Any() || _rightStats.Any())
+        {
+            var lRating   = _leftStats.Any()  ? _leftStats.Average(s => (double)s.AvgRating)   : 0;
+            var rRating   = _rightStats.Any() ? _rightStats.Average(s => (double)s.AvgRating)  : 0;
+            var lGoals    = _leftStats.Any()  ? (double)(_leftPlayer.IsGoalkeeper  ? _leftStats.Sum(s => s.CleanSheets ?? 0)  : _leftStats.Sum(s => s.Goals ?? 0))  : 0;
+            var rGoals    = _rightStats.Any() ? (double)(_rightPlayer.IsGoalkeeper ? _rightStats.Sum(s => s.CleanSheets ?? 0) : _rightStats.Sum(s => s.Goals ?? 0)) : 0;
+            var lAssists  = _leftStats.Any()  ? (double)_leftStats.Sum(s => s.Assists)   : 0;
+            var rAssists  = _rightStats.Any() ? (double)_rightStats.Sum(s => s.Assists)  : 0;
+            var lMatches  = _leftStats.Any()  ? (double)_leftStats.Sum(s => s.MatchesPlayed)  : 0;
+            var rMatches  = _rightStats.Any() ? (double)_rightStats.Sum(s => s.MatchesPlayed) : 0;
+            var lWinR     = _leftStats.Any()  ? _leftStats.Average(s => (double)s.WinRatioWith)  : 0;
+            var rWinR     = _rightStats.Any() ? _rightStats.Average(s => (double)s.WinRatioWith) : 0;
+
+            <div class="row g-3 ui-anim-fade-up mb-3">
+                @* Summary cards *@
+                <div class="col-12">
+                    <div class="ui-panel">
+                        <div class="ui-panel-header">
+                            <span class="ui-panel-title">
+                                <i class="bi bi-trophy text-accent"></i>
+                                Kariérní souhrn
+                            </span>
+                        </div>
+                        <div class="table-responsive p-2">
+                            <table class="table table-sm mb-0 align-middle">
+                                <thead>
+                                    <tr>
+                                        <th style="color:#a5b4fc">@_leftPlayer.Name</th>
+                                        <th class="text-center text-muted">Kategorie</th>
+                                        <th class="text-end" style="color:#fca5a5">@_rightPlayer.Name</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @CompareRow("OVR", _leftPlayer.Ovr, _rightPlayer.Ovr, higher: true)
+                                    @CompareRow("Prům. hodnocení", Math.Round(lRating, 2), Math.Round(rRating, 2), higher: true)
+                                    @CompareRow("Celkem zápasů", (int)lMatches, (int)rMatches, higher: true)
+                                    @CompareRow(_leftPlayer.IsGoalkeeper ? "Čistá konta" : "Góly", (int)lGoals, (int)rGoals, higher: true)
+                                    @CompareRow("Asistence", (int)lAssists, (int)rAssists, higher: true)
+                                    @CompareRow("Win% s hráčem", (int)Math.Round(lWinR), (int)Math.Round(rWinR), higher: true)
+                                    @CompareRow("Věk", _leftPlayer.Age, _rightPlayer.Age, higher: false)
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                @* Radar chart *@
+                @if (_leftStats.Any() && _rightStats.Any())
+                {
+                    var radarItems = new List<RadarItem>
+                    {
+                        new("OVR",         NormOvr(_leftPlayer.Ovr),  NormOvr(_rightPlayer.Ovr)),
+                        new("Hodnocení",   NormRating(lRating),        NormRating(rRating)),
+                        new("Zápasy/sez.", NormMatches(lMatches / _leftStats.Count), NormMatches(rMatches / _rightStats.Count)),
+                        new("Góly/sez.",   NormGoals(lGoals / _leftStats.Count),     NormGoals(rGoals / _rightStats.Count)),
+                        new("Asistenece",  NormGoals(lAssists / _leftStats.Count),   NormGoals(rAssists / _rightStats.Count)),
+                        new("Win%",        NormWin(lWinR),             NormWin(rWinR)),
+                    };
+                    <div class="col-lg-6">
+                        <div class="ui-panel">
+                            <div class="ui-panel-header">
+                                <span class="ui-panel-title"><i class="bi bi-radar text-accent"></i> Radar</span>
+                            </div>
+                            <ApexChart TItem="RadarItem" Options="_radarOptions" Height="300">
+                                <ApexPointSeries TItem="RadarItem" Name="@_leftPlayer.Name"
+                                    Items="radarItems" XValue="@(e => e.Label)"
+                                    YValue="@(e => (decimal?)e.Left)" SeriesType="SeriesType.Radar" />
+                                <ApexPointSeries TItem="RadarItem" Name="@_rightPlayer.Name"
+                                    Items="radarItems" XValue="@(e => e.Label)"
+                                    YValue="@(e => (decimal?)e.Right)" SeriesType="SeriesType.Radar" />
+                            </ApexChart>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+
         var commonSeasons = _leftStats
             .Select(s => s.Season)
             .Intersect(_rightStats.Select(s => s.Season))
@@ -164,6 +243,53 @@ else
 }
 
 @code {
+    private record RadarItem(string Label, double Left, double Right);
+
+    private readonly ApexChartOptions<RadarItem> _radarOptions = new()
+    {
+        Chart  = new ApexCharts.Chart { Toolbar = new Toolbar { Show = false }, Background = "transparent" },
+        Theme  = new ApexCharts.Theme { Mode = Mode.Dark },
+        Colors = ["#a5b4fc", "#fca5a5"],
+        Fill   = new Fill { Opacity = [0.2, 0.2] },
+        Stroke = new Stroke { Width = [2, 2] },
+        Grid   = new Grid  { BorderColor = "rgba(255,255,255,0.08)" },
+        Yaxis  = [new YAxis { Max = 100, Min = 0, Show = false }],
+    };
+
+    private static RenderFragment CompareRow(string label, double left, double right, bool higher)
+    {
+        bool lWins = higher ? left > right : left < right;
+        bool rWins = higher ? right > left : right < left;
+        return __builder =>
+        {
+            __builder.OpenElement(0, "tr");
+            __builder.OpenElement(1, "td");
+            if (lWins) __builder.AddAttribute(2, "class", "fw-bold text-success");
+            else __builder.AddAttribute(2, "class", "text-muted small");
+            __builder.AddContent(3, left.ToString("G4"));
+            __builder.CloseElement();
+            __builder.OpenElement(4, "td");
+            __builder.AddAttribute(5, "class", "text-center text-muted small");
+            __builder.AddContent(6, label);
+            __builder.CloseElement();
+            __builder.OpenElement(7, "td");
+            if (rWins) __builder.AddAttribute(8, "class", "text-end fw-bold text-success");
+            else __builder.AddAttribute(8, "class", "text-end text-muted small");
+            __builder.AddContent(9, right.ToString("G4"));
+            __builder.CloseElement();
+            __builder.CloseElement();
+        };
+    }
+
+    private static RenderFragment CompareRow(string label, int left, int right, bool higher) =>
+        CompareRow(label, (double)left, (double)right, higher);
+
+    private static double NormOvr(double v)     => Math.Clamp((v - 50) / 50.0 * 100, 0, 100);
+    private static double NormRating(double v)  => Math.Clamp((v - 5) / 5.0 * 100, 0, 100);
+    private static double NormMatches(double v) => Math.Clamp(v / 30.0 * 100, 0, 100);
+    private static double NormGoals(double v)   => Math.Clamp(v / 15.0 * 100, 0, 100);
+    private static double NormWin(double v)     => Math.Clamp(v, 0, 100);
+
     private bool _loading = true;
     List<TopElevenPlayer> _players = new();
 

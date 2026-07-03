@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @using Microsoft.EntityFrameworkCore
 @using SharedServices.Models.TopEleven
+@using ApexCharts
 @inject IDbContextFactory<AppDbContextGames> DbFactory
 
 <PageTitle>@(_player?.Name ?? "Hráč") — TopElevenStats</PageTitle>
@@ -118,6 +119,42 @@ else
             </div>
         </div>
 
+        <!-- Trend chart -->
+        @if (_stats.Count >= 2)
+        {
+            <div class="col-12">
+                <div class="ui-panel ui-anim-fade-up">
+                    <div class="ui-panel-header">
+                        <span class="ui-panel-title">
+                            <i class="bi bi-graph-up text-accent"></i>
+                            Vývoj přes sezóny
+                        </span>
+                    </div>
+                    <div class="p-3">
+                        <ApexChart TItem="TopElevenSeasonStats"
+                                   Options="@_chartOptions"
+                                   Height="220">
+                            <ApexPointSeries TItem="TopElevenSeasonStats"
+                                             Items="@(_stats.OrderBy(s => s.Season).ToList())"
+                                             Name="Průměrné hodnocení"
+                                             XValue="@(s => $"S{s.Season}")"
+                                             YValue="@(s => (decimal)s.AvgRating)"
+                                             SeriesType="SeriesType.Line" />
+                            @if (!_player!.IsGoalkeeper)
+                            {
+                                <ApexPointSeries TItem="TopElevenSeasonStats"
+                                                 Items="@(_stats.OrderBy(s => s.Season).ToList())"
+                                                 Name="Góly"
+                                                 XValue="@(s => $"S{s.Season}")"
+                                                 YValue="@(s => (decimal)(s.Goals ?? 0))"
+                                                 SeriesType="SeriesType.Bar" />
+                            }
+                        </ApexChart>
+                    </div>
+                </div>
+            </div>
+        }
+
         <!-- Season stats -->
         <div class="col-lg-8">
             <div class="ui-panel ui-anim-fade-up h-100">
@@ -187,6 +224,15 @@ else
     private bool _loading = true;
     private TopElevenPlayer? _player;
     private List<TopElevenSeasonStats> _stats = new();
+
+    private ApexChartOptions<TopElevenSeasonStats> _chartOptions = new()
+    {
+        Chart = new Chart { Background = "transparent", Toolbar = new Toolbar { Show = false } },
+        Theme = new Theme { Mode = Mode.Dark },
+        Stroke = new Stroke { Curve = Curve.Smooth, Width = [2, 2] },
+        Yaxis = [new YAxis { DecimalsInFloat = 1 }],
+        Legend = new Legend { Show = true, Position = LegendPosition.Top },
+    };
 
     protected override async Task OnParametersSetAsync() => await LoadAsync();
 

@@ -1,0 +1,244 @@
+@page "/seasons"
+@rendermode InteractiveServer
+@using Microsoft.EntityFrameworkCore
+@using ApexCharts
+@inject IDbContextFactory<AppDbContextGames> DbFactory
+@inject ToastService Toast
+
+<PageTitle>Vývoj sezón — TopElevenStats</PageTitle>
+
+<div class="ui-page-header ui-anim-fade-up">
+    <h3><i class="bi bi-graph-up-arrow"></i> Vývoj sezón</h3>
+</div>
+
+@if (_loading)
+{
+    <div class="ui-anim-fade-up d-flex align-items-center gap-2 mt-3">
+        <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+        <span class="text-muted">Načítám data sezón…</span>
+    </div>
+}
+else
+{
+    @* Account selector (only shown if multiple accounts) *@
+    @if (_accounts.Count > 1)
+    {
+        <div class="ui-panel ui-anim-fade-up mb-3">
+            <div class="ui-panel-header">
+                <span class="ui-panel-title">
+                    <i class="bi bi-person-gear text-accent"></i>
+                    Účet
+                </span>
+            </div>
+            <div class="p-3">
+                <select class="form-select form-select-sm"
+                        style="background:rgba(255,255,255,0.05);border-color:rgba(255,255,255,0.1);color:var(--ui-text-1)"
+                        value="@_selectedAccountId" @onchange="OnAccountChanged">
+                    @foreach (var acc in _accounts)
+                    {
+                        <option value="@acc.Guid">@acc.Name</option>
+                    }
+                </select>
+            </div>
+        </div>
+    }
+
+    @if (_seasonRows.Count == 0)
+    {
+        <div class="ui-panel ui-anim-fade-up p-3">
+            <div class="d-flex align-items-center gap-2 text-muted">
+                <i class="bi bi-info-circle"></i>
+                <span>Žádné sezónní statistiky nebyly nalezeny. Nejdříve přidej statistiky v sekci <a href="/stats/add">Přidat statistiky</a>.</span>
+            </div>
+        </div>
+    }
+    else
+    {
+        @* Combo chart *@
+        <div class="ui-panel ui-anim-fade-up mb-3">
+            <div class="ui-panel-header">
+                <span class="ui-panel-title">
+                    <i class="bi bi-bar-chart-line text-accent"></i>
+                    Vývoj kádru přes sezóny
+                </span>
+            </div>
+            <div class="p-2">
+                <ApexChart TItem="SeasonRow" Options="_chartOptions" Height="380">
+                    <ApexPointSeries TItem="SeasonRow"
+                        Name="Celkem gólů / čistých kont"
+                        Items="_seasonRows"
+                        XValue="@(e => $"Sezóna {e.Season}")"
+                        YValue="@(e => (decimal?)e.TotalGoalsOrCleanSheets)"
+                        SeriesType="SeriesType.Bar" />
+                    <ApexPointSeries TItem="SeasonRow"
+                        Name="Průměrné OVR"
+                        Items="_seasonRows"
+                        XValue="@(e => $"Sezóna {e.Season}")"
+                        YValue="@(e => (decimal?)Math.Round(e.AvgOvr, 1))"
+                        SeriesType="SeriesType.Line" />
+                    <ApexPointSeries TItem="SeasonRow"
+                        Name="Průměrné hodnocení"
+                        Items="_seasonRows"
+                        XValue="@(e => $"Sezóna {e.Season}")"
+                        YValue="@(e => (decimal?)Math.Round(e.AvgRating, 2))"
+                        SeriesType="SeriesType.Line" />
+                </ApexChart>
+            </div>
+        </div>
+
+        @* Summary table *@
+        <div class="ui-panel ui-anim-fade-up">
+            <div class="ui-panel-header">
+                <span class="ui-panel-title">
+                    <i class="bi bi-table text-accent"></i>
+                    Přehled po sezónách
+                </span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover table-sm mb-0 align-middle">
+                    <thead>
+                        <tr>
+                            <th>Sezóna</th>
+                            <th class="text-center">Hráčů</th>
+                            <th class="text-center">Prům. OVR</th>
+                            <th class="text-center">Prům. hodnocení</th>
+                            <th class="text-center">Góly / čistá konta</th>
+                            <th class="text-center">Win % (s hráčem)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _seasonRows)
+                        {
+                            <tr>
+                                <td class="fw-bold">Sezóna @row.Season</td>
+                                <td class="text-center">@row.PlayerCount</td>
+                                <td class="text-center">@row.AvgOvr.ToString("F1")</td>
+                                <td class="text-center">@row.AvgRating.ToString("F2")</td>
+                                <td class="text-center">@row.TotalGoalsOrCleanSheets</td>
+                                <td class="text-center">
+                                    <span class="badge @(row.AvgWinRatio >= 50 ? "bg-success" : "bg-danger")">
+                                        @row.AvgWinRatio.ToString("F0") %
+                                    </span>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    private record SeasonRow(
+        int Season,
+        int PlayerCount,
+        double AvgOvr,
+        double AvgRating,
+        int TotalGoalsOrCleanSheets,
+        double AvgWinRatio
+    );
+
+    private bool _loading = true;
+    private List<TopElevenAccount> _accounts = new();
+    private Guid? _selectedAccountId;
+    private List<SeasonRow> _seasonRows = new();
+
+    private readonly ApexChartOptions<SeasonRow> _chartOptions = new()
+    {
+        Chart = new ApexCharts.Chart
+        {
+            Toolbar = new Toolbar { Show = false },
+            Background = "transparent",
+            Type = ApexCharts.ChartType.Bar
+        },
+        Theme = new ApexCharts.Theme { Mode = Mode.Dark },
+        Colors = ["#6366f1", "#34d399", "#f59e0b"],
+        Grid = new Grid { BorderColor = "rgba(255,255,255,0.08)" },
+        Stroke = new Stroke { Width = [0, 3, 3], Curve = [Curve.Smooth, Curve.Smooth, Curve.Smooth] },
+        Yaxis = new List<YAxis>
+        {
+            new YAxis
+            {
+                SeriesName = "Celkem gólů / čistých kont",
+                Title = new AxisTitle { Text = "Góly / čistá konta" }
+            },
+            new YAxis
+            {
+                Opposite = true,
+                SeriesName = "Průměrné OVR",
+                Title = new AxisTitle { Text = "OVR / Hodnocení" }
+            },
+            new YAxis
+            {
+                Opposite = true,
+                SeriesName = "Průměrné hodnocení",
+                Show = false
+            }
+        },
+        Legend = new Legend { Position = LegendPosition.Top },
+        Markers = new Markers { Size = [0, 5, 5] }
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            _accounts = await db.TopElevenAccounts.OrderBy(a => a.Name).ToListAsync();
+            _selectedAccountId = _accounts.FirstOrDefault()?.Guid;
+            await LoadSeasonDataAsync(db);
+        }
+        catch (Exception ex)
+        {
+            Toast.ShowError("Chyba", $"Nepodařilo se načíst data: {ex.Message}");
+        }
+        _loading = false;
+    }
+
+    private async Task OnAccountChanged(ChangeEventArgs e)
+    {
+        _selectedAccountId = Guid.TryParse(e.Value?.ToString(), out var g) ? g : (Guid?)null;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            await LoadSeasonDataAsync(db);
+        }
+        catch (Exception ex)
+        {
+            Toast.ShowError("Chyba", $"Nepodařilo se načíst data: {ex.Message}");
+        }
+        StateHasChanged();
+    }
+
+    private async Task LoadSeasonDataAsync(AppDbContextGames db)
+    {
+        if (_selectedAccountId is null)
+        {
+            _seasonRows = new();
+            return;
+        }
+
+        var stats = await db.TopElevenSeasonStats
+            .Include(s => s.Player)
+            .Where(s => s.Player.AccountId == _selectedAccountId)
+            .ToListAsync();
+
+        _seasonRows = stats
+            .GroupBy(s => s.Season)
+            .OrderBy(g => g.Key)
+            .Select(g =>
+            {
+                var season = g.Key;
+                var playerCount = g.Select(s => s.PlayerId).Distinct().Count();
+                var avgOvr = g.Select(s => s.Player.Ovr).Average();
+                var avgRating = (double)g.Average(s => s.AvgRating);
+                var totalGoals = g.Sum(s => s.Player.IsGoalkeeper
+                    ? (s.CleanSheets ?? 0)
+                    : (s.Goals ?? 0));
+                var avgWinRatio = g.Average(s => (double)s.WinRatioWith);
+                return new SeasonRow(season, playerCount, avgOvr, avgRating, totalGoals, avgWinRatio);
+            })
+            .ToList();
+    }
+}

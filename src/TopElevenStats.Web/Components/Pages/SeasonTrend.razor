@@ -1,5 +1,6 @@
 @page "/seasons"
 @rendermode InteractiveServer
+@attribute [Authorize]
 @using Microsoft.EntityFrameworkCore
 @using ApexCharts
 @inject IDbContextFactory<AppDbContextGames> DbFactory

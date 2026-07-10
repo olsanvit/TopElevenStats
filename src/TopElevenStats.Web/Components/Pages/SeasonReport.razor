@@ -1,5 +1,6 @@
 @page "/season/report"
 @rendermode InteractiveServer
+@attribute [Authorize]
 @using Microsoft.EntityFrameworkCore
 @using SharedServices.Models.TopEleven
 @inject IDbContextFactory<AppDbContextGames> DbFactory

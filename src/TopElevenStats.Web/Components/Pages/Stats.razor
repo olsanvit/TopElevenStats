@@ -1,5 +1,6 @@
 @page "/stats"
 @rendermode InteractiveServer
+@attribute [Authorize]
 @using ApexCharts
 @inject IDbContextFactory<AppDbContextGames> DbFactory
 @inject ToastService Toast

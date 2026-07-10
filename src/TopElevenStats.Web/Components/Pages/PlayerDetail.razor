@@ -1,5 +1,6 @@
 @page "/players/{Id:guid}"
 @rendermode InteractiveServer
+@attribute [Authorize]
 @using Microsoft.EntityFrameworkCore
 @using SharedServices.Models.TopEleven
 @using ApexCharts

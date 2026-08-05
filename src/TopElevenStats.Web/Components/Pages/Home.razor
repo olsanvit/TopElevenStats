@@ -1,5 +1,6 @@
-@* AUDIT:PENDING|Střední|Chybí @rendermode InteractiveServer – ApexCharts nefungují v SSR (+ byl: chyběl [Authorize], přidán) *@
+@* AUDIT:FIXED|přidán @rendermode InteractiveServer pro ApexCharts *@
 @page "/"
+@rendermode InteractiveServer
 @attribute [Authorize]
 @inject IDbContextFactory<AppDbContextGames> DbFactory
 @inject ToastService Toast

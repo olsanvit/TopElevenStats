@@ -6,6 +6,7 @@
 @using ApexCharts
 @inject IDbContextFactory<AppDbContextGames> DbFactory
 @inject ToastService Toast
+@inject TopElevenAccountAccessor AccountAccessor
 
 <PageTitle>Vývoj sezón — TopElevenStats</PageTitle>
 
@@ -186,8 +187,14 @@ else
     {
         try
         {
+            var userId = await AccountAccessor.GetUserIdAsync();
             await using var db = await DbFactory.CreateDbContextAsync();
-            _accounts = await db.TopElevenAccounts.OrderBy(a => a.Name).ToListAsync();
+            _accounts = userId is null
+                ? new()
+                : await db.TopElevenAccounts
+                    .Where(a => a.OwnerUserId == userId)
+                    .OrderBy(a => a.Name)
+                    .ToListAsync();
             _selectedAccountId = _accounts.FirstOrDefault()?.Guid;
             await LoadSeasonDataAsync(db);
         }
@@ -200,7 +207,10 @@ else
 
     private async Task OnAccountChanged(ChangeEventArgs e)
     {
-        _selectedAccountId = Guid.TryParse(e.Value?.ToString(), out var g) ? g : (Guid?)null;
+        // Hodnota přichází od klienta — přijmout jen účet, který uživateli patří.
+        _selectedAccountId = Guid.TryParse(e.Value?.ToString(), out var g) && _accounts.Any(a => a.Guid == g)
+            ? g
+            : null;
         try
         {
             await using var db = await DbFactory.CreateDbContextAsync();

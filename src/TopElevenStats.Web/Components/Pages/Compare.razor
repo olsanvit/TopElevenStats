@@ -6,6 +6,8 @@
 @using ApexCharts
 @inject IDbContextFactory<AppDbContextGames> DbFactory
 @inject ToastService Toast
+@inject TopElevenAccountAccessor AccountAccessor
+@inject AchievementService Achievements
 
 <PageTitle>Srovnání hráčů — TopElevenStats</PageTitle>
 
@@ -118,7 +120,7 @@ else
                         new("Hodnocení",   NormRating(lRating),        NormRating(rRating)),
                         new("Zápasy/sez.", NormMatches(lMatches / _leftStats.Count), NormMatches(rMatches / _rightStats.Count)),
                         new("Góly/sez.",   NormGoals(lGoals / _leftStats.Count),     NormGoals(rGoals / _rightStats.Count)),
-                        new("Asistenece",  NormGoals(lAssists / _leftStats.Count),   NormGoals(rAssists / _rightStats.Count)),
+                        new("Asistence",   NormGoals(lAssists / _leftStats.Count),   NormGoals(rAssists / _rightStats.Count)),
                         new("Win%",        NormWin(lWinR),             NormWin(rWinR)),
                     };
                     <div class="col-lg-6">
@@ -305,11 +307,31 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        await using var db = await DbFactory.CreateDbContextAsync();
-        _players = await db.TopElevenPlayers
-            .OrderByDescending(p => p.Ovr)
-            .ToListAsync();
+        var accountId = await AccountAccessor.GetAccountIdAsync();
+        if (accountId is not null)
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            _players = await db.TopElevenPlayers
+                .Where(p => p.AccountId == accountId)
+                .OrderByDescending(p => p.Ovr)
+                .ToListAsync();
+        }
         _loading = false;
+    }
+
+    /// <summary>
+    /// Odemyká achievementy srovnání. Volá se po změně kteréhokoli z obou výběrů,
+    /// protože teprve tehdy je jisté, že uživatel skutečně dva hráče porovnal.
+    /// </summary>
+    private async Task CheckCompareAchievementsAsync()
+    {
+        if (_leftPlayer is null || _rightPlayer is null) return;
+        await Achievements.CheckAsync("FIRST_COMPARE");
+
+        var commonSeasons = _leftStats.Select(s => s.Season)
+            .Intersect(_rightStats.Select(s => s.Season))
+            .Count();
+        if (commonSeasons >= 2) await Achievements.CheckAsync("COMPARE_SEASONS");
     }
 
     async Task OnLeftChanged(ChangeEventArgs e)
@@ -321,6 +343,7 @@ else
         if (_leftId is null) return;
 
         _leftPlayer = _players.FirstOrDefault(p => p.Guid == _leftId);
+        if (_leftPlayer is null) return;
 
         try
         {
@@ -335,6 +358,7 @@ else
             Toast.ShowError("Chyba", $"Nepodařilo se načíst statistiky: {ex.Message}");
         }
 
+        await CheckCompareAchievementsAsync();
         StateHasChanged();
     }
 
@@ -347,6 +371,7 @@ else
         if (_rightId is null) return;
 
         _rightPlayer = _players.FirstOrDefault(p => p.Guid == _rightId);
+        if (_rightPlayer is null) return;
 
         try
         {
@@ -361,6 +386,7 @@ else
             Toast.ShowError("Chyba", $"Nepodařilo se načíst statistiky: {ex.Message}");
         }
 
+        await CheckCompareAchievementsAsync();
         StateHasChanged();
     }
 }

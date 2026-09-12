@@ -6,6 +6,8 @@
 @using SharedServices.Models.TopEleven
 @inject IDbContextFactory<AppDbContextGames> DbFactory
 @inject IJSRuntime JS
+@inject TopElevenAccountAccessor AccountAccessor
+@inject AchievementService Achievements
 
 <PageTitle>Sezónní report — TopElevenStats</PageTitle>
 
@@ -159,10 +161,16 @@ else
     private int _selectedSeason;
     private List<ReportRow> _reportRows = new();
 
+    private Guid? _accountId;
+
     protected override async Task OnInitializedAsync()
     {
+        _accountId = await AccountAccessor.GetAccountIdAsync();
+        if (_accountId is null) { _loading = false; return; }
+
         await using var db = await DbFactory.CreateDbContextAsync();
         _seasons = await db.TopElevenSeasonStats
+            .Where(s => s.Player.AccountId == _accountId)
             .Select(s => s.Season)
             .Distinct()
             .OrderByDescending(s => s)
@@ -175,12 +183,14 @@ else
 
     private async Task LoadReportAsync()
     {
+        if (_accountId is null) { _reportRows = new(); return; }
+
         _loading = true;
         await using var db = await DbFactory.CreateDbContextAsync();
 
         var query = db.TopElevenSeasonStats
             .Include(s => s.Player)
-            .AsQueryable();
+            .Where(s => s.Player.AccountId == _accountId);
 
         if (_selectedSeason > 0)
             query = query.Where(s => s.Season == _selectedSeason);
@@ -220,10 +230,16 @@ else
         var sb = new System.Text.StringBuilder();
         sb.AppendLine("Hráč,OVR,Role,Hod.,Zápasy,Góly,Asistence,Win%,ŽK,ČK");
         foreach (var r in _reportRows.OrderByDescending(r => r.AvgRating))
-            sb.AppendLine($"\"{r.PlayerName?.Replace("\"", "\"\"")}\",{r.Ovr},{r.Roles},{r.AvgRating:F2},{r.MatchesPlayed},{r.Goals},{r.Assists},{r.WinRatioWith},{r.YellowCards},{r.RedCards}");
+            // Role bývají vícehodnotové ("AML,ML") — bez uvozovek by čárka rozbila sloupce
+            sb.AppendLine($"{Csv(r.PlayerName)},{r.Ovr},{Csv(r.Roles)},{r.AvgRating:F2},{r.MatchesPlayed},{r.Goals},{r.Assists},{r.WinRatioWith},{r.YellowCards},{r.RedCards}");
         var bytes = System.Text.Encoding.UTF8.GetBytes(sb.ToString());
         await JS.InvokeVoidAsync("downloadBase64File", "season_report.csv", "text/csv", Convert.ToBase64String(bytes));
+        await Achievements.CheckAsync("STATS_EXPORT");
+        await Achievements.CheckAsync("EXPORT_STATS");
     }
+
+    /// <summary>Obalí hodnotu do uvozovek a zdvojí uvozovky uvnitř (RFC 4180).</summary>
+    private static string Csv(string? value) => $"\"{value?.Replace("\"", "\"\"")}\"";
 
     private class ReportRow
     {

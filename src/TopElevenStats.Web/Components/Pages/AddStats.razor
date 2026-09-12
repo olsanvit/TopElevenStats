@@ -1,8 +1,11 @@
 @page "/stats/add"
 @rendermode InteractiveServer
-@attribute [Authorize(Roles = "Admin")]
+@* Data jsou per-user (OwnerUserId) — každý si spravuje vlastní kádr, role Admin tu nedává smysl *@
+@attribute [Authorize]
 @inject IDbContextFactory<AppDbContextGames> DbFactory
 @inject ToastService Toast
+@inject TopElevenAccountAccessor AccountAccessor
+@inject TopElevenAchievementEvaluator AchievementEval
 
 <PageTitle>Přidat statistiky — TopElevenStats</PageTitle>
 
@@ -185,8 +188,8 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        _account = await AccountAccessor.GetAccountAsync();
         await using var db = await DbFactory.CreateDbContextAsync();
-        _account = await db.TopElevenAccounts.FirstOrDefaultAsync();
         if (_account is not null)
             _players = await db.TopElevenPlayers
                 .Where(p => p.AccountId == _account.Guid)
@@ -205,8 +208,9 @@ else
     async Task LoadPlayer()
     {
         if (_selectedPlayerId is null || _account is null) { _selectedPlayer = null; return; }
-        await using var db = await DbFactory.CreateDbContextAsync();
         _selectedPlayer = _players.FirstOrDefault(p => p.Guid == _selectedPlayerId);
+        if (_selectedPlayer is null) return;
+        await using var db = await DbFactory.CreateDbContextAsync();
         _existingStats = await db.TopElevenSeasonStats
             .FirstOrDefaultAsync(s => s.PlayerId == _selectedPlayerId && s.Season == _account.CurrentSeason);
         _s = _existingStats is not null
@@ -270,5 +274,6 @@ else
         await db.SaveChangesAsync();
         _existingStats = entity;
         Toast.ShowSuccess("Statistiky uloženy!", string.Empty);
+        await AchievementEval.EvaluateAsync();
     }
 }

@@ -7,6 +7,7 @@ using MercenariesAndBeasts.Infrastructure.Auth;
 using MercenariesAndBeasts.Infrastructure.Localization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Components.Server;
+using Microsoft.AspNetCore.Components.Server.Circuits;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.SignalR;
@@ -19,6 +20,7 @@ using SharedServices;
 using SharedServices.Services;
 using SharedServices.Models.Achievement;
 using TopElevenStats.Web.Achievements;
+using TopElevenStats.Web.Services;
 using Blazored.LocalStorage;
 using Blazored.Modal;
 using Blazored.SessionStorage;
@@ -97,6 +99,11 @@ builder.Services.AddMudServices();
 builder.Services.AddRadzenComponents();
 builder.Services.AddScoped<UiLibraryService>();
 builder.Services.AddScoped<ToastService>();
+builder.Services.AddScoped<TopElevenAccountAccessor>();
+builder.Services.AddScoped<TopElevenAchievementEvaluator>();
+// Per-user perzistence achievementů — musí se aktivovat v circuitu, ne v HTTP scope (viz AchievementCircuitInitializer)
+builder.Services.AddScoped<DbAchievementStore>();
+builder.Services.AddScoped<CircuitHandler, AchievementCircuitInitializer>();
 builder.Services.AddScoped<AchievementService>(sp =>
     new AchievementService(
         sp.GetRequiredService<ToastService>(),
@@ -259,6 +266,9 @@ catch (Exception ex) { Log.Warning(ex, "DB migration/seed skipped — DB not ava
 
 // Seed role a admin účet
 await AdminUserSeeder.SeedAsync(app.Services, app.Configuration);
+
+// Účty z doby před zavedením vlastnictví přiřadit adminovi
+await TopElevenOwnerSeeder.SeedAsync(app.Services, app.Configuration);
 
 app.Lifetime.ApplicationStopping.Register(() =>
     Log.Warning("Application stopping — flushing logs..."));

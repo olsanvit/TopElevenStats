@@ -6,6 +6,8 @@
 @using SharedServices.Models.TopEleven
 @using ApexCharts
 @inject IDbContextFactory<AppDbContextGames> DbFactory
+@inject TopElevenAccountAccessor AccountAccessor
+@inject AchievementService Achievements
 
 <PageTitle>@(_player?.Name ?? "Hráč") — TopElevenStats</PageTitle>
 
@@ -241,14 +243,26 @@ else
     private async Task LoadAsync()
     {
         _loading = true;
+        _stats = new();
+        var accountId = await AccountAccessor.GetAccountIdAsync();
         await using var db = await DbFactory.CreateDbContextAsync();
-        _player = await db.TopElevenPlayers.FindAsync(Id);
+        // Cizí hráč se chová stejně jako neexistující — neprozradí, že Guid existuje.
+        _player = accountId is null
+            ? null
+            : await db.TopElevenPlayers.FirstOrDefaultAsync(p => p.Guid == Id && p.AccountId == accountId);
         if (_player is not null)
         {
             _stats = await db.TopElevenSeasonStats
                 .Where(s => s.PlayerId == Id)
                 .OrderByDescending(s => s.Season)
                 .ToListAsync();
+
+            // Detail nejlepšího hráče kádru je vlastní achievement
+            var maxOvr = await db.TopElevenPlayers
+                .Where(p => p.AccountId == accountId)
+                .MaxAsync(p => (int?)p.Ovr);
+            if (maxOvr is not null && _player.Ovr == maxOvr)
+                await Achievements.CheckAsync("MOST_OVR_PLAYER");
         }
         _loading = false;
     }

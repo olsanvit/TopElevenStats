@@ -104,6 +104,7 @@ else
                         <thead>
                             <tr>
                                 <th>Název účtu</th>
+                                <th>Vlastník</th>
                                 <th class="text-center">Sezóna</th>
                                 <th class="text-end">Hráči</th>
                                 <th class="text-end">Záznamy</th>
@@ -115,6 +116,12 @@ else
                             {
                                 <tr>
                                     <td>@acc.Account.Name</td>
+                                    <td class="small">
+                                        @if (acc.OwnerEmail is not null)
+                                        { <span class="text-muted">@acc.OwnerEmail</span> }
+                                        else
+                                        { <span class="badge bg-danger">bez vlastníka</span> }
+                                    </td>
                                     <td class="text-center">
                                         <div class="d-flex align-items-center justify-content-center gap-1">
                                             <button class="btn btn-sm btn-outline-secondary py-0 px-1"
@@ -182,7 +189,7 @@ else
     private int _userCount, _accountCount, _playerCount, _seasonStatsCount;
     private List<AppUser> _users = new();
 
-    private record AccountRow(TopElevenAccount Account, int PlayerCount, int StatsCount);
+    private record AccountRow(TopElevenAccount Account, string? OwnerEmail, int PlayerCount, int StatsCount);
     private List<AccountRow> _accounts = new();
     private List<TopElevenPlayer> _topPlayers = new();
 
@@ -199,10 +206,24 @@ else
         _seasonStatsCount = await db.TopElevenSeasonStats.CountAsync();
 
         var accounts = await db.TopElevenAccounts.ToListAsync();
+
+        // Počty jedním dotazem na tabulku — dřív se pro každý účet pouštěl synchronní
+        // Count() uvnitř Select(), což blokovalo SignalR vlákno (N+1)
+        var playerCounts = await db.TopElevenPlayers
+            .GroupBy(p => p.AccountId)
+            .Select(g => new { AccountId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.AccountId, x => x.Count);
+        var statsCounts = await db.TopElevenSeasonStats
+            .GroupBy(s => s.Player.AccountId)
+            .Select(g => new { AccountId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.AccountId, x => x.Count);
+
+        var emailById = _users.ToDictionary(u => u.Id, u => u.Email);
         _accounts = accounts.Select(a => new AccountRow(
             a,
-            db.TopElevenPlayers.Count(p => p.AccountId == a.Guid),
-            db.TopElevenSeasonStats.Count(s => s.Player.AccountId == a.Guid)
+            a.OwnerUserId is not null && emailById.TryGetValue(a.OwnerUserId, out var email) ? email : null,
+            playerCounts.GetValueOrDefault(a.Guid),
+            statsCounts.GetValueOrDefault(a.Guid)
         )).ToList();
 
         _topPlayers = await db.TopElevenPlayers

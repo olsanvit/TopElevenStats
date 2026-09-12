@@ -5,6 +5,8 @@
 @inject IDbContextFactory<AppDbContextGames> DbFactory
 @inject ToastService Toast
 @inject AchievementService Achievements
+@inject TopElevenAccountAccessor AccountAccessor
+@inject TopElevenAchievementEvaluator AchievementEval
 
 <PageTitle>Top Eleven Stats — Dashboard</PageTitle>
 
@@ -229,18 +231,16 @@ else
         if (hour == 0 || hour >= 23) await Achievements.CheckAsync("NIGHT_OWL");
         try
         {
-            await using var db = await DbFactory.CreateDbContextAsync();
-            var account = await db.TopElevenAccounts.FirstOrDefaultAsync();
+            var account = await AccountAccessor.GetAccountAsync();
             if (account is null) { _loading = false; return; }
+            await using var db = await DbFactory.CreateDbContextAsync();
             _season = account.CurrentSeason;
-            var tPlayers = db.TopElevenPlayers.Where(p => p.AccountId == account.Guid).ToListAsync();
-            var tStats = db.TopElevenSeasonStats
+            // Postupně — jedna instance DbContextu nesmí mít dva souběžné dotazy.
+            _players = await db.TopElevenPlayers.Where(p => p.AccountId == account.Guid).ToListAsync();
+            var stats = await db.TopElevenSeasonStats
                 .Include(s => s.Player)
                 .Where(s => s.Season == _season && s.Player.AccountId == account.Guid)
                 .ToListAsync();
-            await Task.WhenAll(tPlayers, tStats);
-            _players = tPlayers.Result;
-            var stats = tStats.Result;
             _ovrGroups = new List<OvrGroup>
             {
                 new("60–65", _players.Count(p => p.Ovr >= 60 && p.Ovr < 65)),
@@ -257,6 +257,7 @@ else
             Toast.ShowError("Chyba", $"Nepodařilo se načíst data: {ex.Message}");
         }
         _loading = false;
+        await AchievementEval.EvaluateAsync();
     }
 
     static string WinBadge(int pct) => pct >= 50 ? "bg-success" : "bg-danger";

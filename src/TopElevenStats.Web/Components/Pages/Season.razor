@@ -4,6 +4,9 @@
 @attribute [Authorize]
 @inject IDbContextFactory<AppDbContextGames> DbFactory
 @inject ToastService Toast
+@inject TopElevenAccountAccessor AccountAccessor
+@inject AchievementService Achievements
+@inject TopElevenAchievementEvaluator AchievementEval
 
 <PageTitle>Správa sezóny — TopElevenStats</PageTitle>
 
@@ -112,9 +115,9 @@ else
 
     async Task Load()
     {
-        await using var db = await DbFactory.CreateDbContextAsync();
-        _account = await db.TopElevenAccounts.FirstOrDefaultAsync();
+        _account = await AccountAccessor.GetAccountAsync();
         if (_account is null) return;
+        await using var db = await DbFactory.CreateDbContextAsync();
         var raw = await db.TopElevenSeasonStats
             .Where(s => s.Player.AccountId == _account.Guid)
             .GroupBy(s => s.Season)
@@ -151,6 +154,13 @@ else
     async Task IncreaseSeason()
     {
         if (_account is null) return;
+
+        // Posun sezóny jde zpět jen přes admin panel, takže se stejně jako mazání potvrzuje
+        var confirmed = await _confirmDialog.ShowAsync(
+            "Nová sezóna",
+            $"Opravdu posunout na sezónu {_account.CurrentSeason + 1}? Nové statistiky se pak budou zadávat do ní.");
+        if (!confirmed) return;
+
         await using var db = await DbFactory.CreateDbContextAsync();
         var acc = await db.TopElevenAccounts.FindAsync(_account.Guid);
         if (acc is null) return;
@@ -158,6 +168,9 @@ else
         await db.SaveChangesAsync();
         _account.CurrentSeason = acc.CurrentSeason;
         Toast.ShowSuccess($"Sezóna posunuta na {acc.CurrentSeason}!", string.Empty);
+        await Achievements.CheckAsync("SEASON_RESET");
+        await AchievementEval.EvaluateAsync();
+        if (acc.CurrentSeason >= 2) await Achievements.CheckAsync("FIRST_SEASON");
         await Load();
     }
 }

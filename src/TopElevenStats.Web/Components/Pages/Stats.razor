@@ -5,6 +5,7 @@
 @using ApexCharts
 @inject IDbContextFactory<AppDbContextGames> DbFactory
 @inject ToastService Toast
+@inject TopElevenAccountAccessor AccountAccessor
 
 <PageTitle>Statistiky — TopElevenStats</PageTitle>
 
@@ -225,10 +226,15 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        await using var db = await DbFactory.CreateDbContextAsync();
-        _players = await db.TopElevenPlayers
-            .OrderByDescending(p => p.Ovr)
-            .ToListAsync();
+        var accountId = await AccountAccessor.GetAccountIdAsync();
+        if (accountId is not null)
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            _players = await db.TopElevenPlayers
+                .Where(p => p.AccountId == accountId)
+                .OrderByDescending(p => p.Ovr)
+                .ToListAsync();
+        }
         _loading = false;
     }
 
@@ -240,7 +246,9 @@ else
 
         if (_selectedPlayerId is null) return;
 
+        // _players obsahuje jen hráče vlastního účtu — cizí Guid sem neprojde.
         _selectedPlayer = _players.FirstOrDefault(p => p.Guid == _selectedPlayerId);
+        if (_selectedPlayer is null) return;
 
         try
         {

@@ -13,9 +13,11 @@ TopElevenStats je webová aplikace pro správu hráčů a statistik z fotbalové
 
 - **Framework:** .NET 10, Blazor Server (`@rendermode InteractiveServer`)
 - **ORM:** Entity Framework Core
-- **DB:** SQL Server (nebo SQLite v dev prostředí)
-- **Auth:** ASP.NET Core Identity s `[Authorize]` atributem na stránkách
-- **UI knihovny:** Bootstrap 5, Bootstrap Icons (`bi-*`), ApexCharts (`ApexCharts.Blazor`), Blazored.Modal
+- **DB:** PostgreSQL (Npgsql) — produkce `TopEleven` na pg16 (QNAP); dev přes `DefaultConnection1QNAP`
+- **Auth:** ASP.NET Core Identity + Google OAuth, `[Authorize]` na stránkách, `[Authorize(Roles = "Admin")]` na admin sekci
+- **UI knihovny:** Bootstrap 5, Bootstrap Icons (`bi-*`), ApexCharts (`Blazor-ApexCharts`), Blazored.Modal
+- **Achievementy:** `Achievements/TopElevenAchievements.cs` (100 definic) + `AchievementService` ze SharedServices
+- **Mobile:** `src/TopElevenStats.Mobile` (MAUI) — jen Home a seznam hráčů, read-only
 
 ## Klíčové modely (namespace `SharedServices.Models.TopEleven`)
 
@@ -33,7 +35,9 @@ TopElevenStats je webová aplikace pro správu hráčů a statistik z fotbalové
 | `Citizenship` | `string?` | Občanství |
 
 ### `TopElevenAccount : BaseGuid`
-Reprezentuje uživatelský účet v Top Eleven. Obsahuje `Name` a `CurrentSeason`.
+Reprezentuje uživatelský účet v Top Eleven. Obsahuje `Name`, `CurrentSeason` a `OwnerUserId`
+(FK na `AspNetUsers.Id`, nullable kvůli datům z doby před zavedením vlastnictví).
+Název je unikátní v rámci vlastníka — index `(OwnerUserId, Name)`.
 
 ### `TopElevenSeasonStats`
 Sezónní statistiky hráče: zápasy, góly, asistence, hodnocení, karty, čistá konta, win-ratio.
@@ -58,15 +62,57 @@ Sdílené komponenty a modely jsou ve `src/SharedServices/SharedServices/`:
 
 ## Hlavní stránky
 
+Všechny jsou v `src/TopElevenStats.Web/Components/Pages/`. Podrobný rozbor každé stránky
+(hotovo / chybí / návrhy) je v `docs/pages/<Stranka>.md`.
+
 | Route | Soubor | Popis |
 |---|---|---|
-| `/` | `Home.razor` | Dashboard: sezónní statistiky + OVR distribuce (ApexCharts) |
-| `/players` | `Players.razor` | Seznam hráčů se stránkováním, filtry (jméno, elita, brankář), export CSV |
-| `/import-players` | `ImportPlayers.razor` | Import hráčů z CSV souboru |
-| `/stats` | `Stats.razor` | Grafy statistik (ApexCharts) |
-| `/stats/add` | `Stats/Add.razor` | Přidání sezónních statistik |
-| `/compare` | `Compare.razor` | Srovnání hráčů |
-| `/season` | `Season.razor` | Správa sezóny |
+| `/` | `Home.razor` | Dashboard: dlaždice, OVR distribuce, tabulky GK a hráčů v poli |
+| `/players` | `Players.razor` | Seznam hráčů se stránkováním, filtry, export CSV, založení účtu |
+| `/players/{id}` | `PlayerDetail.razor` | Profil hráče, kariérní průměry, vývoj přes sezóny |
+| `/import-players` | `ImportPlayers.razor` | Import hráčů z CSV (Admin) |
+| `/stats` | `Stats.razor` | Grafy statistik jednoho hráče (ApexCharts) |
+| `/stats/add` | `AddStats.razor` | Zadání sezónních statistik (Admin) |
+| `/compare` | `Compare.razor` | Srovnání dvou hráčů + radar |
+| `/seasons` | `SeasonTrend.razor` | Vývoj kádru přes sezóny |
+| `/season` | `Season.razor` | Správa sezóny (posun +1, mazání sezóny) |
+| `/season/report` | `SeasonReport.razor` | Žebříček hráčů za sezónu, export CSV |
+| `/achievements` | `AchievementsPage.razor` | Mřížka achievementů |
+| `/admin` | `Admin/AdminDashboard.razor` | Admin přehled (Admin) |
+| `/Error`, `/not-found` | `Error.razor`, `NotFound.razor` | Chybové stránky |
+
+## Vlastnictví dat (multi-tenancy)
+
+Každý účet patří právě jednomu uživateli. Stránky proto **nikdy** nesmí sáhnout na
+`db.TopElevenAccounts` přímo (dřívější `FirstOrDefaultAsync()` bralo „první účet v DB“,
+takže druhý uživatel viděl cizí data).
+
+- Účet vždy přes `@inject TopElevenAccountAccessor AccountAccessor`
+  → `GetAccountAsync()` / `GetAccountIdAsync()` / `CreateAccountAsync(name)`
+- Každý dotaz na hráče a statistiky musí být filtrovaný: `.Where(p => p.AccountId == accountId)`
+  nebo `.Where(s => s.Player.AccountId == accountId)`
+- Guid přicházející od klienta (route parametr, hodnota `<select>`) se **musí ověřit** proti
+  vlastnímu účtu — `OwnsPlayerAsync(id)`, nebo dohledáním v už načteném seznamu
+- Výjimka: `Admin/AdminDashboard.razor` záměrně vidí data všech účtů
+
+## Migrace
+
+Kontext je `AppDbContextGames`, migrace patří do
+`src/SharedServices/SharedServices/Migrations/AppDbContextGamesMigrations`:
+
+```
+dotnet ef migrations add <Nazev> --context AppDbContextGames \
+  --project src/SharedServices/SharedServices --startup-project src/TopElevenStats.Web \
+  --output-dir Migrations/AppDbContextGamesMigrations
+```
+
+Na přetíženém Macu to trvá i přes 10 minut (buildí celý submodul). Repo má precedens
+ručně psaných migrací s atributy `[DbContext]` + `[Migration]` a bez `.Designer.cs`
+(např. `AddMustChangePassword`, `AddTopElevenAccountOwner`) — u jednoduché změny je to rychlejší,
+ale pak je nutné ručně srovnat i `AppDbContextGamesModelSnapshot.cs`.
+
+Model i migrace leží v submodulu SharedServices: **nejdřív commit a push v submodulu,
+teprve pak parent** — `git submodule update --remote` by rozpracované změny zahodil.
 
 ## Konvence a vzory
 
@@ -86,3 +132,9 @@ Jméno,OVR,Věk,Role,Spec. schopnost,Elitní,Brankář,Občanství
 ```
 
 Hodnoty s čárkou nebo uvozovkami jsou obaleny do `"..."`, uvozovky uvnitř jsou zdvojeny (`""`).
+
+## Bezpečnost
+
+- Repozitář je **veřejný** (github.com/olsanvit/TopElevenStats) — nikdy do něj nesmí živé credentials.
+- `appsettings.Production.json` je v `.gitignore`; pokud se znovu objeví v `git ls-files`, je to incident.
+- Dev/prod connection stringy patří do User Secrets (`UserSecretsId: top-eleven-stats-dev`) nebo env proměnných.

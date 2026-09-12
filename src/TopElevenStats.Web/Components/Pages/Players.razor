@@ -6,6 +6,8 @@
 @inject ToastService Toast
 @inject IJSRuntime JS
 @inject AchievementService Achievements
+@inject TopElevenAccountAccessor AccountAccessor
+@inject TopElevenAchievementEvaluator AchievementEval
 
 <PageTitle>Hráči — TopElevenStats</PageTitle>
 
@@ -180,7 +182,7 @@ else
             </div>
             <div class="px-3 py-2 border-top border-opacity-10">
                 <Paginator TotalItems="_totalItems" PageSize="PageSize" CurrentPage="_page"
-                           OnPageChanged="async p => { _page = p; await LoadPlayersAsync(); }" />
+                           OnPageChanged="OnPageChangedAsync" />
             </div>
         </div>
     }
@@ -207,8 +209,7 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        await using var db = await DbFactory.CreateDbContextAsync();
-        _account = await db.TopElevenAccounts.FirstOrDefaultAsync();
+        _account = await AccountAccessor.GetAccountAsync();
         if (_account is not null)
             await LoadPlayersAsync();
         _loading = false;
@@ -235,25 +236,45 @@ else
             .ToListAsync();
     }
 
+    private async Task OnPageChangedAsync(int page)
+    {
+        _page = page;
+        await LoadPlayersAsync();
+        // Achievement za prolistování — až od druhé stránky, první se zobrazí sama
+        if (page > 1) await Achievements.CheckAsync("PAGINATE");
+    }
+
     private async Task OnSearchChanged()
     {
         _page = 1;
         await LoadPlayersAsync();
         StateHasChanged();
         if (!string.IsNullOrWhiteSpace(_search)) await Achievements.CheckAsync("SEARCH_PLAYERS");
+        // Prázdný výsledek hledání je vlastní achievement — kontroluje se jen při aktivním filtru
+        if (!string.IsNullOrWhiteSpace(_search) && _totalItems == 0) await Achievements.CheckAsync("NO_RESULTS");
         if (_filterElite) await Achievements.CheckAsync("FILTER_ELITE");
         if (_filterGk) await Achievements.CheckAsync("FILTER_GK");
     }
 
     async Task CreateAccount()
     {
-        await using var db = await DbFactory.CreateDbContextAsync();
-        var acc = new TopElevenAccount { Name = _newAccountName, CurrentSeason = 1 };
-        db.TopElevenAccounts.Add(acc);
-        await db.SaveChangesAsync();
-        _account = acc;
-        Toast.ShowSuccess("Účet vytvořen!", string.Empty);
-        StateHasChanged();
+        if (string.IsNullOrWhiteSpace(_newAccountName))
+        {
+            Toast.ShowError("Chyba", "Název účtu je povinný.");
+            return;
+        }
+
+        try
+        {
+            _account = await AccountAccessor.CreateAccountAsync(_newAccountName.Trim());
+            Toast.ShowSuccess("Účet vytvořen!", string.Empty);
+            await Achievements.CheckAsync("FIRST_ACCOUNT");
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Toast.ShowError("Chyba", $"Nepodařilo se vytvořit účet: {ex.Message}");
+        }
     }
 
     async Task AddPlayer()
@@ -299,6 +320,7 @@ else
         if (savedForm.Ovr >= 90) await Achievements.CheckAsync("OVR_90");
         if (savedForm.Ovr >= 95) await Achievements.CheckAsync("OVR_95");
         if (savedForm.Ovr >= 100) await Achievements.CheckAsync("OVR_100");
+        await AchievementEval.EvaluateAsync();
     }
 
     private async Task ConfirmDelete(Guid id)
@@ -310,14 +332,17 @@ else
 
     private async Task ExecuteDelete(Guid id)
     {
+        if (_account is null) return;
         await using var db = await DbFactory.CreateDbContextAsync();
-        var p = await db.TopElevenPlayers.FindAsync(id);
+        var p = await db.TopElevenPlayers
+            .FirstOrDefaultAsync(x => x.Guid == id && x.AccountId == _account.Guid);
         if (p is null) return;
         db.TopElevenPlayers.Remove(p);
         await db.SaveChangesAsync();
         _players.RemoveAll(x => x.Guid == id);
         Toast.ShowSuccess("Hráč odstraněn.", string.Empty);
         await Achievements.CheckAsync("DELETE_PLAYER");
+        await AchievementEval.EvaluateAsync();
     }
 
     private async Task ExportCsvAsync()

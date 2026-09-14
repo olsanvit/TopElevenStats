@@ -254,21 +254,44 @@ app.MapGet("/Identity/Account/ExternalLogin/Callback", async (
 });
 
 // ── Migrate DB + Seed admin ────────────────────────────────────────────────
+// Po nečistém restartu QNAPu odmítá pg16 i desítky minut spojení (57P03 "starting up").
+// Dřív se selhání migrace jen zalogovalo a appka jela dál — po deployi by tak běžela nad
+// starým schématem (bez nových sloupců) a padala na každé stránce. Neošetřený seeder navíc
+// shazoval proces a restart loop bušil do pg16 uprostřed recovery.
+// V Production proto na DB počkáme a při neúspěchu proces ukončíme (restart policy zkusí znovu).
+// Mimo Production zůstává shovívavé chování, na kterém stojí integrační testy.
+var isProduction = app.Environment.IsProduction();
+var dbReady = await WaitForDatabaseAsync(app, isProduction ? TimeSpan.FromMinutes(10) : TimeSpan.Zero);
+
+if (!dbReady && isProduction)
+{
+    Log.Fatal("Databáze nepřijímá spojení ani po čekání — ukončuji, restart policy to zkusí znovu");
+    Log.CloseAndFlush();
+    Environment.ExitCode = 1;
+    return;
+}
+
 try
 {
-    using (var scope = app.Services.CreateScope())
-    {
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContextGames>();
-        await db.Database.MigrateAsync();
-    }
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContextGames>();
+    await db.Database.MigrateAsync();
+
+    // Seedery až po úspěšné migraci — sahají na tabulky, které migrace teprve vytváří
+    await AdminUserSeeder.SeedAsync(app.Services, app.Configuration);
+    await TopElevenOwnerSeeder.SeedAsync(app.Services, app.Configuration);
 }
-catch (Exception ex) { Log.Warning(ex, "DB migration/seed skipped — DB not available"); }
-
-// Seed role a admin účet
-await AdminUserSeeder.SeedAsync(app.Services, app.Configuration);
-
-// Účty z doby před zavedením vlastnictví přiřadit adminovi
-await TopElevenOwnerSeeder.SeedAsync(app.Services, app.Configuration);
+catch (Exception ex) when (!isProduction)
+{
+    Log.Warning(ex, "DB migration/seed skipped — DB not available");
+}
+catch (Exception ex)
+{
+    Log.Fatal(ex, "Migrace nebo seed selhaly — nespouštím aplikaci nad nekonzistentním schématem");
+    Log.CloseAndFlush();
+    Environment.ExitCode = 1;
+    return;
+}
 
 app.Lifetime.ApplicationStopping.Register(() =>
     Log.Warning("Application stopping — flushing logs..."));
@@ -276,6 +299,32 @@ app.Lifetime.ApplicationStopping.Register(() =>
 try { app.Run(); }
 catch (Exception ex) { Log.Fatal(ex, "Host terminated unexpectedly"); }
 finally { Log.CloseAndFlush(); }
+
+// CanConnectAsync výjimku (i 57P03) spolkne a vrátí false, takže jde bezpečně volat opakovaně.
+// Pauza roste exponenciálně, aby restartující aplikace nezahlcovaly pg16 během recovery.
+static async Task<bool> WaitForDatabaseAsync(WebApplication app, TimeSpan maxWait)
+{
+    var deadline = DateTime.UtcNow + maxWait;
+    var delay = TimeSpan.FromSeconds(2);
+    while (true)
+    {
+        try
+        {
+            using var scope = app.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContextGames>();
+            if (await db.Database.CanConnectAsync()) return true;
+        }
+        catch (Exception ex)
+        {
+            Log.Debug(ex, "Test spojení s databází selhal");
+        }
+
+        if (DateTime.UtcNow + delay > deadline) return false;
+        Log.Warning("Databáze zatím nepřijímá spojení, další pokus za {DelaySeconds} s", delay.TotalSeconds);
+        await Task.Delay(delay);
+        delay = TimeSpan.FromSeconds(Math.Min(delay.TotalSeconds * 2, 60));
+    }
+}
 
 
 public partial class Program { }

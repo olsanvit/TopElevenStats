@@ -95,6 +95,22 @@ takže druhý uživatel viděl cizí data).
   vlastnímu účtu — `OwnsPlayerAsync(id)`, nebo dohledáním v už načteném seznamu
 - Výjimka: `Admin/AdminDashboard.razor` záměrně vidí data všech účtů
 
+## Start aplikace a databáze
+
+Migrace a seedery běží při startu v `Program.cs` a chování se liší podle prostředí:
+
+- **Production:** `WaitForDatabaseAsync` čeká na DB až 10 minut (exponenciální pauza max. 60 s).
+  Když se DB neozve nebo migrace/seed selže, proces skončí s kódem 1 a Docker restart policy to zkusí znovu.
+  Aplikace se **nikdy nesmí spustit nad nemigrovaným schématem** — nové sloupce by chyběly a stránky padaly.
+- **Mimo Production** (vývoj, integrační testy): chyba DB se jen zaloguje a aplikace startuje dál.
+
+Proč: po nečistém restartu QNAPu dělá pg16 úvodní `fsync` datového adresáře a přes hodinu vrací
+`57P03 the database system is starting up`. Původní kód chybu migrace spolkl a neošetřený seeder
+shazoval proces do restart loopu.
+
+Pozor: v Debug buildu `Program.cs` bere `DefaultConnection1QNAP`, takže i integrační testy lokálně sahají
+na DB na QNAPu — když je pg16 dole, zpomalí se nebo selžou z důvodu prostředí, ne kódu.
+
 ## Migrace
 
 Kontext je `AppDbContextGames`, migrace patří do
